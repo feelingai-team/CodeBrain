@@ -2,16 +2,13 @@
 
 A code-based "brain" that dynamically adjusts plans and strategies through code generation.
 
+![](./assets/cover.png)
+
 ## Benchmark Results
 
 CodeBrain-1 achieves top-tier performance on [Terminal Bench 2.0](https://www.tbench.ai/) by 2026-02-10:
 
-| Rank | Agent | Model | Accuracy |
-|------|-------|-------|----------|
-| 1 | Simple Codex | GPT-5.3-Codex | 75.1% ± 2.4 |
-| 2 | **CodeBrain-1** | **GPT-5.3-Codex** | **70.3% ± 2.6** |
-| 3 | Droid | Claude Opus 4.6 | 69.9% ± 2.5 |
-| ... | ... | ... |
+![](./assets/leaderboard.png)
 
 On a focused subset of 47 coding tasks, CodeBrain-1 scores **72.3%**, demonstrating consistent code generation and execution capabilities.
 
