@@ -80,3 +80,41 @@ class LSPClient:
 
     async def resolve_code_action(self, code_action: lsp.CodeAction) -> lsp.CodeAction:
         raise NotImplementedError
+
+    # Document symbols
+
+    async def get_document_symbols(
+        self, file_path: Path
+    ) -> list[lsp.DocumentSymbol] | list[lsp.SymbolInformation] | None:
+        raise NotImplementedError
+
+    # Call hierarchy
+
+    async def get_call_hierarchy_incoming(
+        self, file_path: Path, line: int, character: int
+    ) -> list[lsp.CallHierarchyIncomingCall]:
+        raise NotImplementedError
+
+    async def get_call_hierarchy_outgoing(
+        self, file_path: Path, line: int, character: int
+    ) -> list[lsp.CallHierarchyOutgoingCall]:
+        raise NotImplementedError
+
+    # Type definition
+
+    async def get_type_definition(
+        self, file_path: Path, line: int, character: int
+    ) -> list[lsp.Location] | list[lsp.LocationLink] | None:
+        raise NotImplementedError
+
+    # Rename
+
+    async def prepare_rename(
+        self, file_path: Path, line: int, character: int
+    ) -> lsp.PrepareRenameResult | None:
+        raise NotImplementedError
+
+    async def rename(
+        self, file_path: Path, line: int, character: int, new_name: str
+    ) -> lsp.WorkspaceEdit | None:
+        raise NotImplementedError

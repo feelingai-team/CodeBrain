@@ -68,6 +68,37 @@ class Diagnostic(BaseModel):
         )
 
 
+class SymbolKind(IntEnum):
+    """Symbol kinds matching LSP specification."""
+
+    FILE = 1
+    MODULE = 2
+    NAMESPACE = 3
+    PACKAGE = 4
+    CLASS = 5
+    METHOD = 6
+    PROPERTY = 7
+    FIELD = 8
+    CONSTRUCTOR = 9
+    ENUM = 10
+    INTERFACE = 11
+    FUNCTION = 12
+    VARIABLE = 13
+    CONSTANT = 14
+    STRING = 15
+    NUMBER = 16
+    BOOLEAN = 17
+    ARRAY = 18
+    OBJECT = 19
+    KEY = 20
+    NULL = 21
+    ENUM_MEMBER = 22
+    STRUCT = 23
+    EVENT = 24
+    OPERATOR = 25
+    TYPE_PARAMETER = 26
+
+
 class SymbolLocation(BaseModel):
     """A symbol's location in the codebase."""
 
@@ -106,3 +137,47 @@ class DiagnosticContext(BaseModel):
     reference_depth: int = 1
     reference_limit: int = 0
     references_truncated: bool = False
+
+
+class DocumentSymbol(BaseModel):
+    """A symbol in a document (hierarchical)."""
+
+    name: str
+    kind: SymbolKind
+    range: Range
+    selection_range: Range
+    detail: str | None = None
+    children: list[DocumentSymbol] = Field(default_factory=list)
+
+
+class CallHierarchyItem(BaseModel):
+    """An item in a call hierarchy."""
+
+    name: str
+    kind: SymbolKind
+    file_path: str
+    range: Range
+    selection_range: Range
+    detail: str | None = None
+
+
+class CallHierarchyCall(BaseModel):
+    """A call relationship in the hierarchy."""
+
+    item: CallHierarchyItem
+    from_ranges: list[Range] = Field(default_factory=list)
+
+
+class RenameEdit(BaseModel):
+    """A text edit for a rename operation."""
+
+    file_path: str
+    range: Range
+    new_text: str
+
+
+class RenameResult(BaseModel):
+    """Result of a rename operation."""
+
+    edits: list[RenameEdit] = Field(default_factory=list)
+    files_affected: int = 0
