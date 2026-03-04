@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from codebrain.core.interfaces import ContextAwareDiagnosticReporter
 from codebrain.core.models import Diagnostic, DiagnosticContext
 from codebrain.lsp.servers.base import LSPReporter
+
+logger = logging.getLogger(__name__)
 
 
 class MultiLanguageReporter(ContextAwareDiagnosticReporter):
@@ -48,25 +51,77 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
         return any(r.is_running for r in self._reporters)
 
     async def start(self) -> None:
-        raise NotImplementedError
+        for reporter in self._reporters:
+            if not reporter.is_running:
+                try:
+                    await reporter.start()
+                except Exception:
+                    logger.exception("Failed to start reporter: %s", reporter.name)
 
     async def stop(self) -> None:
-        raise NotImplementedError
+        for reporter in self._reporters:
+            if reporter.is_running:
+                try:
+                    await reporter.stop()
+                except Exception:
+                    logger.exception("Failed to stop reporter: %s", reporter.name)
 
     async def get_diagnostics(self, file_path: Path) -> list[Diagnostic]:
-        raise NotImplementedError
+        reporter = self.get_reporter_for_file(file_path)
+        if reporter is None:
+            return []
+        if not reporter.is_running:
+            logger.warning("Starting reporter on demand: %s", reporter.name)
+            await reporter.start()
+        try:
+            return await reporter.get_diagnostics(file_path)
+        except TimeoutError:
+            logger.error("Timeout getting diagnostics from %s", reporter.name)
+            return []
+        except Exception:
+            logger.exception("Error getting diagnostics from %s", reporter.name)
+            return []
 
     async def get_all_diagnostics(self) -> dict[Path, list[Diagnostic]]:
-        raise NotImplementedError
+        combined: dict[Path, list[Diagnostic]] = {}
+        for reporter in self._reporters:
+            if not reporter.is_running:
+                continue
+            try:
+                result = await reporter.get_all_diagnostics()
+                combined.update(result)
+            except Exception:
+                logger.exception("Error getting diagnostics from %s", reporter.name)
+        return combined
 
     async def get_context(self, diagnostic: Diagnostic) -> DiagnosticContext:
-        raise NotImplementedError
+        file_path = Path(diagnostic.file_path)
+        reporter = self.get_reporter_for_file(file_path)
+        if reporter is None:
+            msg = f"No reporter for {file_path.suffix}"
+            raise ValueError(msg)
+        if not reporter.is_running:
+            await reporter.start()
+        try:
+            return await reporter.get_context(diagnostic)
+        except TimeoutError:
+            logger.error("Timeout getting context from %s", reporter.name)
+            return DiagnosticContext(diagnostic=diagnostic)
+        except Exception:
+            logger.exception("Error getting context from %s", reporter.name)
+            return DiagnosticContext(diagnostic=diagnostic)
 
     async def open_file(self, file_path: Path) -> None:
-        raise NotImplementedError
+        reporter = self.get_reporter_for_file(file_path)
+        if reporter is not None:
+            await reporter.open_file(file_path)
 
     async def update_file(self, file_path: Path, content: str) -> None:
-        raise NotImplementedError
+        reporter = self.get_reporter_for_file(file_path)
+        if reporter is not None:
+            await reporter.update_file(file_path, content)
 
     async def close_file(self, file_path: Path) -> None:
-        raise NotImplementedError
+        reporter = self.get_reporter_for_file(file_path)
+        if reporter is not None:
+            await reporter.close_file(file_path)

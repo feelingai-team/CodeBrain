@@ -23,4 +23,15 @@ async def validate_workspace(
     max_files: int = 100,
 ) -> dict[Path, list[Diagnostic]]:
     """Run diagnostics on all matching files in a directory."""
-    raise NotImplementedError
+    target_exts = extensions or reporter.supported_extensions
+    files: list[Path] = []
+    for ext in target_exts:
+        files.extend(directory.rglob(f"*{ext}"))
+    files = sorted(files)[:max_files]
+
+    results: dict[Path, list[Diagnostic]] = {}
+    for file_path in files:
+        diags = await reporter.get_diagnostics(file_path)
+        if diags:
+            results[file_path] = diags
+    return results

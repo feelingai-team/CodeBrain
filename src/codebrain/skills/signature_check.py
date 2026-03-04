@@ -25,4 +25,31 @@ async def signature_check(
     character: int,
 ) -> SignatureCheckResult:
     """Detect signature changes and check their downstream impact."""
-    raise NotImplementedError
+    impact = await reporter.analyze_signature_change_impact(file_path, line, character)
+
+    # Gather diagnostics from affected files to find broken usages
+    broken: list[Diagnostic] = []
+    for affected_file in impact.affected_files:
+        diags = await reporter.get_diagnostics(Path(affected_file))
+        broken.extend(diags)
+
+    # Get hover info for the current signature
+    hover_info: str | None = None
+    if reporter._client is not None:
+        try:
+            hover = await reporter._client.get_hover(file_path, line, character)
+            if hover is not None:
+                from lsprotocol import types as lsp
+
+                if isinstance(hover.contents, str):
+                    hover_info = hover.contents
+                elif isinstance(hover.contents, lsp.MarkupContent):
+                    hover_info = hover.contents.value
+        except Exception:
+            pass
+
+    return SignatureCheckResult(
+        impact=impact,
+        broken_diagnostics=broken,
+        hover_info=hover_info,
+    )
