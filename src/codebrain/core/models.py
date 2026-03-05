@@ -181,3 +181,12 @@ class RenameResult(BaseModel):
 
     edits: list[RenameEdit] = Field(default_factory=list)
     files_affected: int = 0
+
+
+class WorkspaceInfo(BaseModel):
+    """Configuration and state for a single workspace root."""
+
+    root_path: str
+    name: str | None = None
+    languages: list[str] | None = None
+    lsp_overrides: dict[str, list[str]] = Field(default_factory=dict)
