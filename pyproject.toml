@@ -26,6 +26,9 @@ search = [
 mcp = [
     "fastmcp>=2.0.0",
 ]
+watch = [
+    "watchfiles>=1.0.0",
+]
 
 [project.scripts]
 codebrain-mcp = "codebrain.mcp.cli:main"

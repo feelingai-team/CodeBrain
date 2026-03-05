@@ -1,5 +1,6 @@
 """Structural code search via tree-sitter."""
 
+from codebrain.search.index import FileWatcher, SymbolIndex
 from codebrain.search.parser import (
     EXTENSION_TO_LANGUAGE,
     TreeSitterParser,
@@ -13,8 +14,10 @@ from codebrain.search.symbols import get_document_symbols
 
 __all__ = [
     "EXTENSION_TO_LANGUAGE",
+    "FileWatcher",
     "PatternMatch",
     "SymbolGraph",
+    "SymbolIndex",
     "SymbolInfo",
     "TreeSitterParser",
     "build_symbol_graph",

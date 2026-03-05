@@ -72,9 +72,28 @@ async def _lifespan(server: FastMCP) -> AsyncIterator[dict]:
     languages = server.settings.get("languages")
     reporter = _build_reporter(workspace, languages)
     await reporter.start()
+
+    # Build incremental symbol index in background
+    from codebrain.search.index import SymbolIndex
+
+    index = SymbolIndex(workspace)
+    await index.build()
+
+    # Start file watcher if watchfiles is available
+    watcher = None
     try:
-        yield {"reporter": reporter, "workspace": workspace}
+        from codebrain.search.index import FileWatcher
+
+        watcher = FileWatcher(index, workspace)
+        await watcher.start()
+    except ImportError:
+        pass
+
+    try:
+        yield {"reporter": reporter, "workspace": workspace, "index": index}
     finally:
+        if watcher is not None:
+            await watcher.stop()
         await reporter.stop()
 
 
@@ -104,6 +123,9 @@ def create_server(
 
     def _workspace(ctx: Context) -> Path:
         return ctx.lifespan_context["workspace"]
+
+    def _index(ctx: Context) -> object:
+        return ctx.lifespan_context["index"]
 
     # ==================================================================
     # Tools — validation
@@ -291,7 +313,16 @@ def create_server(
         max_chars: int = 4096,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> str:
-        """Generate a concise repository map ranked by symbol importance (PageRank)."""
+        """Generate a concise repository map ranked by symbol importance (PageRank).
+
+        Uses the incremental index for instant results when available.
+        """
+        from codebrain.search.index import SymbolIndex
+
+        index = _index(ctx)
+        if isinstance(index, SymbolIndex) and index.is_built:
+            return index.generate_repomap(max_chars)
+
         from codebrain.search.repomap import generate_repomap as _repomap
 
         return await _repomap(_workspace(ctx), max_chars)
