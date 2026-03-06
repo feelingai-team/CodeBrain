@@ -29,6 +29,9 @@ mcp = [
 watch = [
     "watchfiles>=1.0.0",
 ]
+all = [
+    "codebrain[mcp,search,watch]",
+]
 
 [project.scripts]
 codebrain-mcp = "codebrain.mcp.cli:main"

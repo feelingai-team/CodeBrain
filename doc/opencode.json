@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "codebrain": {
+      "type": "local",
+      "command": ["uvx", "codebrain[mcp,search]"],
+      "enabled": true
+    }
+  }
+}

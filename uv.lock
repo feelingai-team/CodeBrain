@@ -223,6 +223,16 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "fastmcp" },
+    { name = "tree-sitter" },
+    { name = "tree-sitter-c" },
+    { name = "tree-sitter-cpp" },
+    { name = "tree-sitter-javascript" },
+    { name = "tree-sitter-python" },
+    { name = "tree-sitter-typescript" },
+    { name = "watchfiles" },
+]
 mcp = [
     { name = "fastmcp" },
 ]
@@ -248,6 +258,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "codebrain", extras = ["mcp", "search", "watch"], marker = "extra == 'all'" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.0.0" },
     { name = "lsprotocol", specifier = ">=2023.0.0" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -259,7 +270,7 @@ requires-dist = [
     { name = "tree-sitter-typescript", marker = "extra == 'search'", specifier = ">=0.23.0" },
     { name = "watchfiles", marker = "extra == 'watch'", specifier = ">=1.0.0" },
 ]
-provides-extras = ["search", "mcp", "watch"]
+provides-extras = ["search", "mcp", "watch", "all"]
 
 [package.metadata.requires-dev]
 dev = [
