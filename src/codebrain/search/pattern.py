@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from codebrain.search.parser import (
-    EXTENSION_TO_LANGUAGE,
     TreeSitterParser,
+    collect_source_files,
     get_default_parser,
 )
 
@@ -40,11 +40,7 @@ def _collect_files(
     if file_paths is not None:
         return [p for p in file_paths if p.is_file()]
 
-    exts = {ext for ext, lang in EXTENSION_TO_LANGUAGE.items() if lang == language}
-    result: list[Path] = []
-    for ext in exts:
-        result.extend(workspace_root.rglob(f"*{ext}"))
-    return sorted(result)
+    return [fp for fp, _ in collect_source_files(workspace_root, language)]
 
 
 async def search_pattern(

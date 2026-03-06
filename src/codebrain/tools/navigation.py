@@ -21,12 +21,24 @@ from codebrain.core.models import (
 from codebrain.lsp.servers.base import LSPReporter, lsp_range_to_range, uri_to_path
 
 
-def _get_lsp_reporter(reporter: ContextAwareDiagnosticReporter) -> LSPReporter:
-    """Cast reporter to LSPReporter, raising if not an LSP reporter."""
-    if not isinstance(reporter, LSPReporter):
-        msg = f"Navigation tools require an LSPReporter, got {type(reporter).__name__}"
-        raise TypeError(msg)
-    return reporter
+def _get_lsp_reporter(
+    reporter: ContextAwareDiagnosticReporter,
+    file_path: Path | None = None,
+) -> LSPReporter:
+    """Resolve to an LSPReporter, handling MultiLanguageReporter routing."""
+    if isinstance(reporter, LSPReporter):
+        return reporter
+
+    # Handle MultiLanguageReporter by routing to the correct sub-reporter
+    from codebrain.lsp.servers.multi import MultiLanguageReporter
+
+    if isinstance(reporter, MultiLanguageReporter) and file_path is not None:
+        sub = reporter.get_reporter_for_file(file_path)
+        if sub is not None:
+            return sub
+
+    msg = f"Navigation tools require an LSPReporter, got {type(reporter).__name__}"
+    raise TypeError(msg)
 
 
 async def goto_definition(
@@ -36,7 +48,7 @@ async def goto_definition(
     character: int,
 ) -> SymbolLocation | None:
     """Find where a symbol is defined."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     return await lsp_reporter._resolve_definition(file_path, line, character)
 
@@ -48,7 +60,7 @@ async def find_references(
     character: int,
 ) -> list[SymbolLocation]:
     """Find all references to a symbol."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     refs, _ = await lsp_reporter._gather_recursive_references(
         file_path, line, character, max_depth=1, max_refs=50
@@ -63,7 +75,7 @@ async def get_hover(
     character: int,
 ) -> str | None:
     """Get type/documentation info for a symbol at a position."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
     hover = await lsp_reporter._client.get_hover(file_path, line, character)
@@ -82,7 +94,7 @@ async def get_code_actions(
     diagnostic: Diagnostic,
 ) -> list[CodeActionSuggestion]:
     """Get suggested fixes for a diagnostic."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, Path(diagnostic.file_path))
     return await lsp_reporter.get_code_actions_for_diagnostic(diagnostic)
 
 
@@ -91,7 +103,7 @@ async def document_symbols(
     file_path: Path,
 ) -> list[DocumentSymbol]:
     """Get hierarchical symbol outline. Falls back to tree-sitter if LSP unavailable."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
 
@@ -159,7 +171,7 @@ async def incoming_calls(
     character: int,
 ) -> list[CallHierarchyCall]:
     """Find all callers of a function/method."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
     result = await lsp_reporter._client.get_call_hierarchy_incoming(
@@ -175,7 +187,7 @@ async def outgoing_calls(
     character: int,
 ) -> list[CallHierarchyCall]:
     """Find all functions called by a function/method."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
     result = await lsp_reporter._client.get_call_hierarchy_outgoing(
@@ -191,7 +203,7 @@ async def goto_type_definition(
     character: int,
 ) -> SymbolLocation | None:
     """Find where the type of a symbol is defined."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
     result = await lsp_reporter._client.get_type_definition(file_path, line, character)
@@ -219,7 +231,7 @@ async def rename_symbol(
     new_name: str,
 ) -> RenameResult:
     """Rename a symbol across the workspace."""
-    lsp_reporter = _get_lsp_reporter(reporter)
+    lsp_reporter = _get_lsp_reporter(reporter, file_path)
     await lsp_reporter.open_file(file_path)
     assert lsp_reporter._client is not None
     workspace_edit = await lsp_reporter._client.rename(file_path, line, character, new_name)

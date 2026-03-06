@@ -7,8 +7,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 from codebrain.search.parser import (
-    EXTENSION_TO_LANGUAGE,
     TreeSitterParser,
+    collect_source_files,
     get_default_parser,
 )
 
@@ -95,13 +95,7 @@ def _collect_language_files(
     workspace_root: Path, language: str | None
 ) -> list[tuple[Path, str]]:
     """Collect files with their language, optionally filtered by language."""
-    result: list[tuple[Path, str]] = []
-    for ext, lang in EXTENSION_TO_LANGUAGE.items():
-        if language is not None and lang != language:
-            continue
-        for file_path in workspace_root.rglob(f"*{ext}"):
-            result.append((file_path, lang))
-    return sorted(result, key=lambda t: t[0])
+    return collect_source_files(workspace_root, language)
 
 
 async def search_symbol(

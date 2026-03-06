@@ -39,6 +39,49 @@ def language_for_extension(ext: str) -> str | None:
     return EXTENSION_TO_LANGUAGE.get(ext)
 
 
+# Directories to skip when collecting source files
+_SKIP_DIRS: set[str] = {
+    ".venv", "venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "node_modules", ".git", ".hg", "dist", "build", ".tox", ".nox", ".eggs",
+    "site-packages", ".cache", ".pytype",
+}
+
+
+def collect_source_files(
+    root: Path,
+    language: str | None = None,
+) -> list[tuple[Path, str]]:
+    """Collect source files under *root*, skipping vendor/build directories.
+
+    Returns a sorted list of (file_path, language) tuples.
+    """
+    extensions = {
+        ext: lang
+        for ext, lang in EXTENSION_TO_LANGUAGE.items()
+        if language is None or lang == language
+    }
+    result: list[tuple[Path, str]] = []
+    _walk_source_files(root, extensions, result)
+    return sorted(result, key=lambda t: t[0])
+
+
+def _walk_source_files(
+    directory: Path,
+    extensions: dict[str, str],
+    result: list[tuple[Path, str]],
+) -> None:
+    try:
+        entries = sorted(directory.iterdir())
+    except PermissionError:
+        return
+    for entry in entries:
+        if entry.is_dir():
+            if entry.name not in _SKIP_DIRS:
+                _walk_source_files(entry, extensions, result)
+        elif entry.suffix in extensions:
+            result.append((entry, extensions[entry.suffix]))
+
+
 class TreeSitterParser:
     """Manages tree-sitter parsers and language grammars with lazy loading."""
 

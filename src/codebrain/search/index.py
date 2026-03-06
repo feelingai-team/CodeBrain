@@ -11,8 +11,8 @@ import logging
 from pathlib import Path
 
 from codebrain.search.parser import (
-    EXTENSION_TO_LANGUAGE,
     TreeSitterParser,
+    collect_source_files,
     get_default_parser,
     language_for_extension,
 )
@@ -231,11 +231,7 @@ class SymbolIndex:
     # Internals
     # ------------------------------------------------------------------
     def _collect_files(self) -> list[tuple[Path, str]]:
-        result: list[tuple[Path, str]] = []
-        for ext, lang in EXTENSION_TO_LANGUAGE.items():
-            for fp in self._workspace_root.rglob(f"*{ext}"):
-                result.append((fp, lang))
-        return sorted(result, key=lambda t: t[0])
+        return collect_source_files(self._workspace_root)
 
     def _index_file_definitions(
         self, file_path: Path, language: str, source: bytes
@@ -381,6 +377,8 @@ class FileWatcher:
             return
 
         # Filter to only watch source files we care about
+        from codebrain.search.parser import EXTENSION_TO_LANGUAGE
+
         extensions = set(EXTENSION_TO_LANGUAGE.keys())
 
         def _filter(_change: Change, path: str) -> bool:
