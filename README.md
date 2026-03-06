@@ -41,15 +41,25 @@ distribute(
 
 CodeBrain exposes 9 tools (validate, outline, search, explore_symbol, check_impact, debug_trace, rename_symbol, add_workspace, list_workspaces) via the [Model Context Protocol](https://modelcontextprotocol.io/). Any MCP-compatible agent can use them.
 
-### Claude Code
+### From source (current)
 
-**One-liner (recommended):**
+Clone the repo and install in editable mode:
 
 ```bash
-claude mcp add --transport stdio codebrain -- uvx "codebrain[mcp,search]"
+git clone https://github.com/feelingai-team/CodeBrain.git
+cd CodeBrain
+uv pip install -e ".[all]"
 ```
 
-This registers CodeBrain globally. It will be available in every Claude Code session.
+### Claude Code
+
+**One-liner** — register globally so it's available in every session:
+
+```bash
+claude mcp add --transport stdio codebrain -- codebrain-mcp
+```
+
+Claude Code starts the MCP server in your project's working directory, so CodeBrain automatically targets the right codebase — no `--workspace` flag needed.
 
 **Project-scoped** (shared with your team via git) — add `.mcp.json` to your project root:
 
@@ -58,12 +68,17 @@ This registers CodeBrain globally. It will be available in every Claude Code ses
   "mcpServers": {
     "codebrain": {
       "type": "stdio",
-      "command": "uvx",
-      "args": ["codebrain[mcp,search]"]
+      "command": "codebrain-mcp",
+      "args": []
     }
   }
 }
 ```
+
+> **After PyPI publish** you can use `uvx` instead (no pre-install needed):
+> ```bash
+> claude mcp add --transport stdio codebrain -- uvx "codebrain[mcp,search]"
+> ```
 
 **Verify it works** — start a new Claude Code session and run:
 
@@ -76,7 +91,7 @@ You should see `codebrain` listed with 9 tools.
 ### OpenCode
 
 ```bash
-opencode mcp add codebrain --type local --command "uvx codebrain[mcp,search]"
+opencode mcp add codebrain --type local --command "codebrain-mcp"
 ```
 
 Or add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
@@ -87,17 +102,20 @@ Or add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
   "mcp": {
     "codebrain": {
       "type": "local",
-      "command": ["uvx", "codebrain[mcp,search]"],
+      "command": ["codebrain-mcp"],
       "enabled": true
     }
   }
 }
 ```
 
+> **After PyPI publish**, replace `"codebrain-mcp"` with `["uvx", "codebrain[mcp,search]"]`.
+
 ### Manual / Other Agents
 
 ```bash
-pip install codebrain[mcp,search]
+pip install -e ".[all]"       # from source
+# pip install codebrain[mcp,search]  # after PyPI publish
 codebrain-mcp --workspace /path/to/project
 ```
 
