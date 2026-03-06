@@ -50,7 +50,7 @@ async def main() -> None:
     def _record(name: str, t0: float, result: str) -> None:
         store.record(ToolTrace(
             tool=name,
-            timestamp=t0,
+            timestamp=time.time(),
             duration_ms=(time.monotonic() - t0) * 1000,
             args={},
             result_chars=len(result),

@@ -30,10 +30,9 @@ class TraceStore:
 
     log_dir: Path = field(default_factory=lambda: _DEFAULT_LOG_DIR)
     traces: list[ToolTrace] = field(default_factory=list)
-    _flush_interval: int = 20  # flush every N traces
 
     def record(self, trace: ToolTrace) -> None:
-        """Record a tool trace and auto-flush if buffer is full."""
+        """Record a tool trace and flush immediately."""
         self.traces.append(trace)
         logger.info(
             "tool=%s duration=%.0fms result_chars=%d%s",
@@ -42,8 +41,7 @@ class TraceStore:
             trace.result_chars,
             f" error={trace.error}" if trace.error else "",
         )
-        if len(self.traces) >= self._flush_interval:
-            self.flush()
+        self.flush()
 
     def flush(self) -> None:
         """Write buffered traces to a JSONL file."""

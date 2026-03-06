@@ -54,7 +54,7 @@ def create_server(
     def _trace(tool_name: str, args: dict, t0: float, result: str) -> None:
         get_store().record(ToolTrace(
             tool=tool_name,
-            timestamp=t0,
+            timestamp=time.time(),
             duration_ms=(time.monotonic() - t0) * 1000,
             args=args,
             result_chars=len(result),
