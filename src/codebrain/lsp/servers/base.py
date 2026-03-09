@@ -65,6 +65,10 @@ def lsp_severity_to_severity(
 class LSPReporter(ContextAwareDiagnosticReporter):
     """Base class for all LSP-based diagnostic reporters."""
 
+    # Subclasses set this to auto-discover the project root.
+    # E.g. ("go.mod", "go.work") for Go, ("pyproject.toml",) for Python.
+    _project_markers: tuple[str, ...] = ()
+
     def __init__(
         self,
         workspace_root: Path,
@@ -96,14 +100,45 @@ class LSPReporter(ContextAwareDiagnosticReporter):
     def is_running(self) -> bool:
         return self._client is not None and self._client.is_running
 
+    def _resolve_project_root(self) -> Path:
+        """Find the best project root by looking for marker files.
+
+        Checks the workspace root first, then one level of subdirectories.
+        Returns workspace_root unchanged if no markers are defined or found.
+        """
+        if not self._project_markers:
+            return self._workspace_root
+
+        # Check workspace root itself
+        for marker in self._project_markers:
+            if (self._workspace_root / marker).exists():
+                return self._workspace_root
+
+        # Search one level down
+        try:
+            for child in sorted(self._workspace_root.iterdir()):
+                if child.is_dir() and not child.name.startswith("."):
+                    for marker in self._project_markers:
+                        if (child / marker).exists():
+                            logger.info(
+                                "Auto-detected %s project root: %s (found %s)",
+                                self.name, child, marker,
+                            )
+                            return child
+        except OSError:
+            pass
+
+        return self._workspace_root
+
     # -- Lifecycle --
 
     async def start(self) -> None:
         if self.is_running:
             return
+        effective_root = self._resolve_project_root()
         self._client = LSPClient(
             server_command=self._server_command,
-            workspace_root=self._workspace_root,
+            workspace_root=effective_root,
             notification_handlers={
                 "textDocument/publishDiagnostics": self._handle_diagnostics,
             },

@@ -10,6 +10,8 @@ from codebrain.lsp.servers.base import LSPReporter
 class GoplsReporter(LSPReporter):
     """Diagnostic reporter using gopls for Go files."""
 
+    _project_markers = ("go.mod", "go.work")
+
     def __init__(
         self,
         workspace_root: Path,

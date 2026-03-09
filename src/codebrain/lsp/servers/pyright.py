@@ -10,6 +10,8 @@ from codebrain.lsp.servers.base import LSPReporter
 class PyrightReporter(LSPReporter):
     """Diagnostic reporter using Pyright for Python files."""
 
+    _project_markers = ("pyproject.toml", "setup.py", "setup.cfg", "pyrightconfig.json")
+
     def __init__(
         self,
         workspace_root: Path,

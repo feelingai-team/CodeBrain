@@ -10,6 +10,8 @@ from codebrain.lsp.servers.base import LSPReporter
 class TypeScriptReporter(LSPReporter):
     """Diagnostic reporter using typescript-language-server for TS/JS files."""
 
+    _project_markers = ("tsconfig.json", "package.json", "jsconfig.json")
+
     def __init__(
         self,
         workspace_root: Path,

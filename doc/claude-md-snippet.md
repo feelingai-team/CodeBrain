@@ -1,76 +1,138 @@
-# CodeBrain CLAUDE.md Snippet
+# CodeBrain CLAUDE.md Template
 
-Copy the section below into your project's `CLAUDE.md`. The directives are intentionally strong —
-Claude Code needs imperative rules to override its defaults.
+Copy the section below into your project's `CLAUDE.md` and adjust for your language/project.
 
 ---
 
-## Code Intelligence (CodeBrain MCP)
+## Standard Operating Procedures
 
-This project has CodeBrain configured. It provides LSP-based type checking, symbol navigation, and structural search via MCP tools. These tools give you capabilities that built-in tools (Grep, Glob, Read) cannot: type-aware diagnostics, go-to-definition, find-all-references, call hierarchy, and impact analysis.
+Follow these step-by-step procedures for ALL implementation work. Execute each step in order — do not skip steps.
 
-### MANDATORY Rules
+### SOP 1: Feature Implementation
 
-1. **After editing any file, run `validate`** on it to catch type errors before moving on:
-   ```
-   validate(file_path="<the file you just edited>")
-   ```
-   This returns diagnostics with suggested fixes. Fix any errors before proceeding.
+**Step 1 — Map the codebase.** Run this yourself in the main conversation (not via sub-agents):
+```
+outline()
+```
+This returns a ranked workspace map. Use it to identify where your feature fits.
 
-2. **Before modifying a function/class signature, run `check_impact`** to understand the blast radius:
-   ```
-   check_impact(file_path="<file>", line=<line>, character=<col>)
-   ```
-   This shows every caller and usage that would break. Plan your changes accordingly.
+**Step 2 — Find related code.** Search for symbols related to your feature:
+```
+search(query="<relevant function or type name>")
+```
+For each key symbol, get its full type info:
+```
+explore_symbol(file_path="<file>", symbol_query="<name>")
+```
+Read files only after you've located them via search/explore.
 
-3. **When you need to understand what a symbol IS (type, definition, docs), use `explore_symbol`** — do NOT read the whole file and guess:
-   ```
-   explore_symbol(file_path="<file>", line=<line>, character=<col>)
-   ```
-   This returns the definition location, type signature, and docstring in one call.
+**Step 3 — Analyze impact before coding.** For every function/class/interface you plan to modify:
+```
+check_impact(file_path="<file>", line=<line>, character=<col>)
+```
+This shows every caller and usage that will break. Do not skip this step.
 
-4. **When you encounter a stack trace or error, use `debug_trace`** before manually reading files:
-   ```
-   debug_trace(stack_trace="<paste the full trace>")
-   ```
-   This enriches each frame with type info and definitions, so you understand the error faster.
+**Step 4 — Implement, one file at a time.** For each file:
 
-### When to Prefer CodeBrain Over Built-in Tools
+  4a. Make the edit.
 
-| Task | Do NOT do this | Do this instead |
-|------|---------------|-----------------|
-| Find where a function is defined | `Grep` for `def function_name` | `explore_symbol(file_path=..., symbol_query="function_name")` |
-| Find all callers of a function | `Grep` for `function_name(` | `explore_symbol(..., include_callers=True)` |
-| Check if your edit broke anything | Read files and hope | `validate(file_path="<edited file>")` |
-| Understand a class before modifying it | Read the whole file | `outline(file_path="<file>")` then `explore_symbol` on specific members |
-| Rename a symbol safely | Find-and-replace | `rename_symbol(file_path=..., line=..., character=..., new_name="...")` |
-| Understand codebase structure | `Glob` + `Read` many files | `outline()` for a ranked workspace map |
+  4b. Immediately run:
+  ```
+  validate(file_path="<the file you just edited>")
+  ```
+  4c. If errors: fix them and re-run `validate`. Do NOT move to the next file until clean.
 
-### Tool Parameters Cheat Sheet
+  4d. For renames, use:
+  ```
+  rename_symbol(file_path="<file>", line=<line>, character=<col>, new_name="<new>")
+  ```
+  Never use Grep + Edit for renames.
 
-**`validate`** — Type-check code
-- `file_path`: single file with rich context per error (definition + hover + fix suggestions)
-- `directory` + `extensions` + `max_files`: bulk scan
+**Step 5 — Final verification.**
+```
+validate(directory="<project root>")
+```
+Then run your project's build and test commands.
 
-**`explore_symbol`** — Look up any symbol
-- Position mode: `file_path` + `line` + `character` (0-indexed)
-- Name mode: `file_path` + `symbol_query` (fuzzy match)
-- Flags: `include_references`, `include_callers`, `include_callees`
+---
 
-**`check_impact`** — What breaks if this symbol changes?
-- `file_path` + `line` + `character` (required)
-- `check_signature=True` (default) for full signature analysis
+### SOP 2: Bug Fix & Debugging
 
-**`outline`** — Code structure
-- With `file_path`: hierarchical symbol tree for that file
-- Without `file_path`: ranked workspace-wide repository map
+**Step 1 — Collect evidence.**
 
-**`search`** — Find code
-- Name search: `query` + optional `kind` (function, class, variable)
-- Structural: `query` (tree-sitter pattern) + `language` + `pattern_mode=True`
+  - If you have a stack trace:
+    ```
+    debug_trace(stack_trace="<full trace>")
+    ```
+    Do this BEFORE reading any files.
 
-**`rename_symbol`** — Safe rename across workspace
-- `file_path` + `line` + `character` + `new_name`
+  - If no stack trace:
+    ```
+    validate(file_path="<suspected file>")
+    ```
 
-**`debug_trace`** — Enrich a stack trace
-- `stack_trace`: the full trace text (Python, JS, Go, C++, Rust supported)
+**Step 2 — Trace the call chain.**
+```
+explore_symbol(file_path="<file>", line=<line>, character=<col>, include_callers=True)
+```
+Follow callers upward to understand how the buggy code path is reached.
+
+**Step 3 — Understand the buggy symbol.**
+```
+explore_symbol(file_path="<file>", line=<line>, character=<col>)
+```
+Returns definition, type signature, and documentation.
+
+**Step 4 — Fix.** Edit the file, then immediately:
+```
+validate(file_path="<the file you just edited>")
+```
+Fix errors before touching another file.
+
+**Step 5 — Verify.** If you changed any signatures:
+```
+check_impact(file_path="<file>", line=<line>, character=<col>)
+```
+Then run tests.
+
+---
+
+## Tool Quick Reference
+
+| Tool | What it does | Key parameters |
+|------|-------------|----------------|
+| `outline` | Workspace map or file symbol tree | `file_path` (optional) |
+| `search` | Find symbols by name | `query`, `kind`, `language` |
+| `explore_symbol` | Definition + type info + callers | `file_path` + `line` + `character` (0-indexed), or `file_path` + `symbol_query` |
+| `check_impact` | What breaks if symbol changes | `file_path` + `line` + `character` |
+| `validate` | Type-check via LSP | `file_path` (single) or `directory` + `extensions` (bulk) |
+| `rename_symbol` | Safe cross-workspace rename | `file_path` + `line` + `character` + `new_name` |
+| `debug_trace` | Enrich stack trace with types | `stack_trace` (full text) |
+
+**Note:** Sub-agents (Explore, Plan, feature-dev:code-explorer) cannot access these tools. Always run them yourself in the main conversation.
+
+---
+
+## PostToolUse Hook (Optional)
+
+Add to `.claude/settings.json` for automatic validate reminders after file edits:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty'); EXT=\"your_extension_here\"; if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.$EXT$\"; then echo \"[CodeBrain] You just edited $FILE. Run validate(file_path=\\\"$FILE\\\") NOW.\"; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replace `your_extension_here` with your language's extension (e.g., `go`, `py`, `ts`).

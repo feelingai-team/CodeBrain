@@ -10,6 +10,8 @@ from codebrain.lsp.servers.base import LSPReporter
 class ClangdReporter(LSPReporter):
     """Diagnostic reporter using Clangd for C/C++ files."""
 
+    _project_markers = ("compile_commands.json", "CMakeLists.txt", ".clangd")
+
     def __init__(
         self,
         workspace_root: Path,
