@@ -234,7 +234,12 @@ class LSPReporter(ContextAwareDiagnosticReporter):
     # -- Diagnostics --
 
     async def get_diagnostics(self, file_path: Path) -> list[Diagnostic]:
-        await self.open_file(file_path)
+        if file_path in self._open_files:
+            # Re-read from disk — the file may have been edited externally
+            content = file_path.read_text(errors="replace")
+            await self.update_file(file_path, content)
+        else:
+            await self.open_file(file_path)
         try:
             await asyncio.wait_for(self._diagnostics_event.wait(), timeout=5.0)
         except TimeoutError:
