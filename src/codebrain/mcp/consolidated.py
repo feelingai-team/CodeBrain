@@ -293,16 +293,27 @@ async def debug_trace(
 ) -> str:
     """Parse a stack trace and enrich each frame with LSP context."""
     from codebrain.skills.stack_trace import analyze_stack_trace as _analyze
+    from codebrain.skills.stack_trace import parse_stack_trace
 
-    # Use first available LSP reporter for enrichment
-    lsp_r = next(
-        (
-            ws.reporter.get_reporter_for_file(Path(f"dummy{ext}"))
-            for ext in ws.reporter.supported_extensions
-            if ws.reporter.get_reporter_for_file(Path(f"dummy{ext}")) is not None
-        ),
-        None,
-    )
+    # Detect file extensions from the trace to pick the right reporter
+    lsp_r = None
+    frames = parse_stack_trace(stack_trace)
+    for frame in frames:
+        ext = Path(frame.file_path).suffix
+        if ext:
+            r = ws.reporter.get_reporter_for_file(Path(f"dummy{ext}"))
+            if r is not None:
+                lsp_r = r
+                break
+
+    # Fall back: any already-running reporter
+    if lsp_r is None:
+        for ext in ws.reporter.supported_extensions:
+            r = ws.reporter.get_reporter_for_file(Path(f"dummy{ext}"))
+            if r is not None and r.is_running:
+                lsp_r = r
+                break
+
     if lsp_r is None:
         return "No language server available for stack trace analysis."
     result = await _analyze(lsp_r, stack_trace, Path(ws.info.root_path))
