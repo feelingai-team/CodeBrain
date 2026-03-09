@@ -47,6 +47,13 @@ SYMBOL_NODE_TYPES: dict[str, dict[str, str]] = {
         "type_definition": "type",
         "namespace_definition": "namespace",
     },
+    "go": {
+        "function_declaration": "function",
+        "method_declaration": "method",
+        "type_spec": "type",  # structs, interfaces, type aliases
+        "var_spec": "variable",
+        "const_spec": "variable",
+    },
 }
 
 

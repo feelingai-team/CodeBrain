@@ -43,6 +43,13 @@ _KIND_MAP: dict[str, dict[str, SymbolKind]] = {
         "namespace_definition": SymbolKind.NAMESPACE,
         "type_definition": SymbolKind.VARIABLE,
     },
+    "go": {
+        "function_declaration": SymbolKind.FUNCTION,
+        "method_declaration": SymbolKind.METHOD,
+        "type_spec": SymbolKind.STRUCT,
+        "var_spec": SymbolKind.VARIABLE,
+        "const_spec": SymbolKind.VARIABLE,
+    },
 }
 
 # Node types whose children should be recursed into for nested symbols
@@ -52,6 +59,7 @@ _CONTAINER_TYPES: dict[str, set[str]] = {
     "typescript": {"class_declaration", "class_body", "interface_declaration"},
     "c": {"struct_specifier"},
     "cpp": {"class_specifier", "struct_specifier", "namespace_definition"},
+    "go": {"type_declaration", "var_declaration", "const_declaration"},
 }
 
 

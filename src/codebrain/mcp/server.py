@@ -60,9 +60,21 @@ def create_server(
             result_chars=len(result),
         ))
 
+    def _resolve(file_path: str | None) -> str | None:
+        """Resolve a potentially relative file path to an absolute one."""
+        if file_path is None:
+            return None
+        p = Path(file_path)
+        if not p.is_absolute():
+            p = Path(workspace_root).resolve() / p
+        return str(p)
+
     async def _get_ws(file_path: str | Path | None = None) -> Workspace:
         if file_path:
-            ws = await manager.get_workspace_for_file(Path(file_path))
+            p = Path(file_path)
+            if not p.is_absolute():
+                p = Path(workspace_root).resolve() / p
+            ws = await manager.get_workspace_for_file(p)
             if ws:
                 return ws
 
@@ -109,6 +121,8 @@ def create_server(
         Use file_path for rich per-error context, or directory for a bulk scan.
         """
         t0 = time.monotonic()
+        file_path = _resolve(file_path)
+        directory = _resolve(directory)
         ws = await _get_ws(file_path or directory)
         result = await _c.validate(ws, file_path, directory, extensions, max_files)
         _trace("validate", {"file_path": file_path, "directory": directory}, t0, result)
@@ -132,6 +146,7 @@ def create_server(
         Use (line, character) for position-based lookup, or symbol_query for name matching.
         """
         t0 = time.monotonic()
+        file_path = _resolve(file_path) or file_path
         ws = await _get_ws(file_path)
         result = await _c.explore_symbol(
             ws, file_path, line, character, symbol_query,
@@ -154,6 +169,7 @@ def create_server(
     ) -> str:
         """Get a symbol outline for a file, or a ranked repository map of the whole workspace."""
         t0 = time.monotonic()
+        file_path = _resolve(file_path)
         ws = await _get_ws(file_path)
         result = await _c.outline(ws, file_path, max_chars)
         _trace("outline", {"file_path": file_path}, t0, result)
@@ -171,6 +187,7 @@ def create_server(
     ) -> str:
         """Analyze what breaks if a symbol changes: usages, broken diagnostics, suggested fixes."""
         t0 = time.monotonic()
+        file_path = _resolve(file_path) or file_path
         ws = await _get_ws(file_path)
         result = await _c.check_impact(ws, file_path, line, character, check_signature)
         _trace("check_impact", {"file_path": file_path, "line": line}, t0, result)
@@ -193,6 +210,8 @@ def create_server(
         Set pattern_mode=True for tree-sitter queries (requires language).
         """
         t0 = time.monotonic()
+        if file_paths:
+            file_paths = [_resolve(p) or p for p in file_paths]
         first_path = file_paths[0] if file_paths else None
         ws = await _get_ws(first_path)
         result = await _c.search(ws, query, language, kind, file_paths, pattern_mode, max_results)
@@ -221,6 +240,7 @@ def create_server(
         """Rename a symbol across the workspace."""
         from codebrain.tools.navigation import rename_symbol as _rename
 
+        file_path = _resolve(file_path) or file_path
         ws = await _get_ws(file_path)
         result = await _rename(
             ws.reporter, Path(file_path), line, character, new_name
