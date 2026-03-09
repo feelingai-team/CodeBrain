@@ -61,6 +61,10 @@ class TypeScriptConfig(LanguageConfig):
     tsconfig_path: Path | None = None
 
 
+class GoConfig(LanguageConfig):
+    lsp_command: list[str] | None = Field(default_factory=lambda: ["gopls", "serve"])
+
+
 class ValidationConfig(BaseModel):
     """Master configuration for multi-language validation."""
 
@@ -68,6 +72,7 @@ class ValidationConfig(BaseModel):
     python: PythonConfig = Field(default_factory=PythonConfig)
     cpp: CppConfig = Field(default_factory=CppConfig)
     typescript: TypeScriptConfig = Field(default_factory=TypeScriptConfig)
+    go: GoConfig = Field(default_factory=GoConfig)
     parallel_file_limit: int = 10
     diagnostic_timeout: float = 30.0
 
@@ -86,6 +91,7 @@ class ValidationConfig(BaseModel):
             ".tsx": self.typescript,
             ".js": self.typescript,
             ".jsx": self.typescript,
+            ".go": self.go,
         }
         return mapping.get(extension)
 

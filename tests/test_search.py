@@ -97,7 +97,7 @@ class TestExtensionMapping:
 
     def test_all_extensions_have_valid_languages(self) -> None:
         for ext, lang in EXTENSION_TO_LANGUAGE.items():
-            assert lang in ("python", "javascript", "typescript", "c", "cpp"), (
+            assert lang in ("python", "javascript", "typescript", "c", "cpp", "go"), (
                 f"Unknown language {lang} for {ext}"
             )
 

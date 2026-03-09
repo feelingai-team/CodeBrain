@@ -15,6 +15,7 @@ LANGUAGE_MAP: dict[str, str] = {
     "typescript": "tree_sitter_typescript",
     "c": "tree_sitter_c",
     "cpp": "tree_sitter_cpp",
+    "go": "tree_sitter_go",
 }
 
 EXTENSION_TO_LANGUAGE: dict[str, str] = {
@@ -31,6 +32,7 @@ EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".cxx": "cpp",
     ".hpp": "cpp",
     ".hxx": "cpp",
+    ".go": "go",
 }
 
 
@@ -43,7 +45,7 @@ def language_for_extension(ext: str) -> str | None:
 _SKIP_DIRS: set[str] = {
     ".venv", "venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
     "node_modules", ".git", ".hg", "dist", "build", ".tox", ".nox", ".eggs",
-    "site-packages", ".cache", ".pytype",
+    "site-packages", ".cache", ".pytype", "vendor",
 }
 
 

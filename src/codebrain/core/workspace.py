@@ -10,7 +10,7 @@ from pathlib import Path
 from codebrain.core.models import WorkspaceInfo
 from codebrain.lsp.factory import build_multi_reporter
 from codebrain.lsp.servers.multi import MultiLanguageReporter
-from codebrain.search.index import SymbolIndex
+from codebrain.search.index import FileWatcher, SymbolIndex
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class Workspace:
     info: WorkspaceInfo
     reporter: MultiLanguageReporter
     index: SymbolIndex
-    # Optional watcher could be added here
+    watcher: FileWatcher | None = None
     _is_running: bool = False
 
     async def start(self) -> None:
@@ -48,12 +48,22 @@ class Workspace:
             return
         await self.reporter.start()
         await self.index.build()
+        # Start file watcher for incremental index updates (requires watchfiles)
+        watcher = FileWatcher(self.index, Path(self.info.root_path))
+        try:
+            await watcher.start()
+            self.watcher = watcher
+        except Exception:
+            logger.debug("File watcher unavailable, incremental indexing disabled")
         self._is_running = True
 
     async def stop(self) -> None:
         """Stop all services for this workspace."""
         if not self._is_running:
             return
+        if self.watcher is not None:
+            await self.watcher.stop()
+            self.watcher = None
         await self.reporter.stop()
         self._is_running = False
 

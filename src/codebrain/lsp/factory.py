@@ -28,6 +28,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from codebrain.lsp.servers.gopls import GoplsReporter
+    _LANGUAGE_FACTORIES["go"] = GoplsReporter
+except ImportError:
+    pass
+
 
 def build_multi_reporter(
     workspace_root: Path,
