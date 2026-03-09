@@ -159,13 +159,13 @@ async def outline(
     - file_path → hierarchical document symbols
     - no file_path → workspace-wide repomap ranked by importance
     """
-    if file_path:
+    if file_path and not Path(file_path).is_dir():
         from codebrain.tools.navigation import document_symbols as _symbols
 
         syms = await _symbols(ws.reporter, Path(file_path))
         return format_document_symbols(syms)
 
-    # Workspace-wide repomap
+    # Workspace-wide repomap (also used when file_path is a directory)
     if ws.index.is_built:
         return ws.index.generate_repomap(max_chars)
 
