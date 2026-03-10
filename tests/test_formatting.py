@@ -39,6 +39,7 @@ def _diag(
     msg: str,
     severity: DiagnosticSeverity = DiagnosticSeverity.ERROR,
     file_path: str = "test.py",
+    code: str = "reportMissing",
 ) -> Diagnostic:
     return Diagnostic(
         file_path=file_path,
@@ -46,7 +47,7 @@ def _diag(
         severity=severity,
         message=msg,
         source="pyright",
-        code="reportMissing",
+        code=code,
     )
 
 
@@ -56,21 +57,28 @@ class TestFormatDiagnostics:
 
     def test_single_error(self) -> None:
         result = format_diagnostics([_diag("Variable not defined")])
-        assert "**ERROR**" in result
+        assert "ERROR" in result
         assert "Variable not defined" in result
         assert "[reportMissing]" in result
         assert "(pyright)" in result
 
     def test_multiple_severities(self) -> None:
         diags = [
-            _diag("Error msg", DiagnosticSeverity.ERROR),
-            _diag("Warn msg", DiagnosticSeverity.WARNING),
-            _diag("Info msg", DiagnosticSeverity.INFORMATION),
+            _diag("Error msg", DiagnosticSeverity.ERROR, code="reportError"),
+            _diag("Warn msg", DiagnosticSeverity.WARNING, code="reportWarn"),
+            _diag("Info msg", DiagnosticSeverity.INFORMATION, code="reportInfo"),
         ]
         result = format_diagnostics(diags)
-        assert "**ERROR**" in result
-        assert "**WARN**" in result
-        assert "**INFO**" in result
+        assert "ERROR" in result
+        assert "WARN" in result
+        assert "INFO" in result
+
+    def test_grouped_truncation(self) -> None:
+        """Many diagnostics of the same type get grouped and sampled."""
+        diags = [_diag(f"Error {i}") for i in range(10)]
+        result = format_diagnostics(diags)
+        assert "10 occurrences" in result
+        assert "... and 5 more of this type" in result
 
 
 class TestFormatDiagnosticContext:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from codebrain.core.models import (
     CallHierarchyCall,
     Diagnostic,
@@ -19,19 +21,77 @@ _SEVERITY_ICONS: dict[DiagnosticSeverity, str] = {
     DiagnosticSeverity.HINT: "HINT",
 }
 
+# Limits for grouped diagnostic formatting
+MAX_DIAGNOSTIC_TYPES = 5
+MAX_SAMPLES_PER_TYPE = 5
+
+
+def _read_source_line(file_path: str, line_number: int) -> str | None:
+    """Read a specific line from a file (0-indexed)."""
+    try:
+        path = Path(file_path)
+        if not path.exists():
+            return None
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for i, line in enumerate(f):
+                if i == line_number:
+                    return line.rstrip()
+        return None
+    except Exception:
+        return None
+
 
 def format_diagnostics(diagnostics: list[Diagnostic]) -> str:
-    """Format diagnostics as Markdown for LLM consumption."""
+    """Format diagnostics grouped by code/rule with sampling.
+
+    Groups diagnostics by their code, shows the top types by count,
+    samples up to MAX_SAMPLES_PER_TYPE from each, and includes source code.
+    """
     if not diagnostics:
         return "No diagnostics found."
 
-    lines: list[str] = []
+    # Group diagnostics by code/rule
+    groups: dict[str, list[Diagnostic]] = {}
     for diag in diagnostics:
-        severity = _SEVERITY_ICONS.get(diag.severity, "UNKNOWN")
-        code_str = f" [{diag.code}]" if diag.code else ""
-        source_str = f" ({diag.source})" if diag.source else ""
-        loc = f"{diag.file_path}:{diag.range.start}"
-        lines.append(f"- **{severity}**{code_str}{source_str} at `{loc}`: {diag.message}")
+        key = str(diag.code) if diag.code is not None else "unknown"
+        groups.setdefault(key, []).append(diag)
+
+    # Sort groups by count (descending) and take top N
+    sorted_groups = sorted(groups.items(), key=lambda x: len(x[1]), reverse=True)
+    top_groups = sorted_groups[:MAX_DIAGNOSTIC_TYPES]
+
+    lines: list[str] = []
+    for code, group_diags in top_groups:
+        sampled = group_diags[:MAX_SAMPLES_PER_TYPE]
+        remaining = len(group_diags) - len(sampled)
+
+        severity = _SEVERITY_ICONS.get(group_diags[0].severity, "UNKNOWN")
+        source_str = f" ({group_diags[0].source})" if group_diags[0].source else ""
+        lines.append(f"\n**[{code}]**{source_str} ({len(group_diags)} occurrences, {severity}):")
+
+        for diag in sampled:
+            line_num = diag.range.start.line
+            display_line = line_num + 1
+            lines.append(f"  Line {display_line}: {diag.message}")
+
+            source_line = _read_source_line(diag.file_path, line_num)
+            if source_line is not None:
+                if len(source_line) > 100:
+                    source_line = source_line[:97] + "..."
+                lines.append(f"    > {source_line}")
+
+        if remaining > 0:
+            lines.append(f"  ... and {remaining} more of this type")
+
+    # Report omitted types
+    omitted_types = len(sorted_groups) - len(top_groups)
+    if omitted_types > 0:
+        omitted_count = sum(len(g) for _, g in sorted_groups[MAX_DIAGNOSTIC_TYPES:])
+        lines.append(
+            f"\n... and {omitted_types} more diagnostic type(s) "
+            f"with {omitted_count} total occurrence(s)"
+        )
+
     return "\n".join(lines)
 
 
