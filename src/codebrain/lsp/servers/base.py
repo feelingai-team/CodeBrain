@@ -211,6 +211,10 @@ class LSPReporter(ContextAwareDiagnosticReporter):
 
     # -- File management --
 
+    def _language_id_for_file(self, file_path: Path) -> str:
+        """Return the LSP languageId for a file. Override for extension-specific IDs."""
+        return self._language_id
+
     async def open_file(self, file_path: Path) -> None:
         await self._ensure_started()
         assert self._client is not None
@@ -218,7 +222,7 @@ class LSPReporter(ContextAwareDiagnosticReporter):
             return
         self._file_versions[file_path] = 1
         self._diagnostics_event.clear()
-        await self._client.did_open(file_path, self._language_id, version=1)
+        await self._client.did_open(file_path, self._language_id_for_file(file_path), version=1)
         self._open_files.add(file_path)
 
     async def update_file(self, file_path: Path, content: str) -> None:

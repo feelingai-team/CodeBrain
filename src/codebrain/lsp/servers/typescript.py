@@ -6,6 +6,14 @@ from pathlib import Path
 
 from codebrain.lsp.servers.base import LSPReporter
 
+# LSP spec languageId values per extension
+_EXT_TO_LANGUAGE_ID: dict[str, str] = {
+    ".ts": "typescript",
+    ".tsx": "typescriptreact",
+    ".js": "javascript",
+    ".jsx": "javascriptreact",
+}
+
 
 class TypeScriptReporter(LSPReporter):
     """Diagnostic reporter using typescript-language-server for TS/JS files."""
@@ -27,3 +35,7 @@ class TypeScriptReporter(LSPReporter):
     @property
     def supported_extensions(self) -> set[str]:
         return {".ts", ".tsx", ".js", ".jsx"}
+
+    def _language_id_for_file(self, file_path: Path) -> str:
+        """Return the correct LSP languageId based on file extension."""
+        return _EXT_TO_LANGUAGE_ID.get(file_path.suffix, self._language_id)

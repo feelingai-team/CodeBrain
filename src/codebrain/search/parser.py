@@ -46,6 +46,9 @@ _SKIP_DIRS: set[str] = {
     ".venv", "venv", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
     "node_modules", ".git", ".hg", "dist", "build", ".tox", ".nox", ".eggs",
     "site-packages", ".cache", ".pytype", "vendor",
+    # Framework build output directories
+    ".next", ".nuxt", ".output", ".svelte-kit", ".vercel", ".turbo",
+    "out", "coverage", ".parcel-cache", ".docusaurus",
 }
 
 

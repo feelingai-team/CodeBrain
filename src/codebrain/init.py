@@ -147,7 +147,7 @@ def generate_claude_md(
     """Generate CLAUDE.md content."""
     parts: list[str] = []
     parts.append("# CLAUDE.md\n")
-    parts.append(f"## Project Overview\n")
+    parts.append("## Project Overview\n")
     parts.append(f"**{project_name}** — detected languages: {', '.join(languages)}\n")
 
     if subprojects:
@@ -156,6 +156,31 @@ def generate_claude_md(
         for sp in subprojects:
             parts.append(f"| `{sp['path']}` | {sp['language']} | {sp['marker']} |")
         parts.append("")
+
+    # Environment preparation section — language-specific setup hints
+    env_steps: list[str] = []
+    for lang in languages:
+        if lang == "python":
+            env_steps.append("- **Python**: `python -m venv .venv && source .venv/bin/activate "
+                             "&& pip install -e '.[dev]'`")
+        elif lang == "go":
+            env_steps.append("- **Go**: `go mod download` (required for LSP validation)")
+        elif lang == "typescript":
+            env_steps.append("- **TypeScript/JS**: `npm install` or `yarn` or `pnpm install`")
+        elif lang == "cpp":
+            env_steps.append("- **C/C++**: ensure `compile_commands.json` exists "
+                             "(e.g. `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`)")
+        elif lang == "rust":
+            env_steps.append("- **Rust**: `cargo build` (populates target/ for rust-analyzer)")
+
+    if env_steps:
+        parts.append("## Environment Preparation\n")
+        parts.append("Run these commands **before** using CodeBrain tools "
+                     "(especially `validate`):\n")
+        parts.extend(env_steps)
+        parts.append("")
+        parts.append("Without these steps, `validate()` may report false-positive "
+                     "import/dependency errors.\n")
 
     parts.append("""## Standard Operating Procedures
 
@@ -314,8 +339,11 @@ def init_project(
                 )
         elif sp["language"] == "go":
             if not (sp_path / "vendor").is_dir() and (sp_path / "go.sum").exists():
-                # go.sum exists but no vendor — modules need downloading
-                pass  # gopls handles this via GOMODCACHE
+                # go.sum exists but no vendor — modules may need downloading
+                warnings.append(
+                    f"  ⚠ {sp['path']}: run `cd {sp['path']} && go mod download` "
+                    f"to ensure all dependencies are cached for LSP validation"
+                )
         elif sp["language"] == "typescript":
             if not (sp_path / "node_modules").is_dir():
                 warnings.append(

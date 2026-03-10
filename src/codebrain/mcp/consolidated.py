@@ -14,22 +14,44 @@ from codebrain.core.formatting import (
 from codebrain.core.models import Diagnostic
 from codebrain.core.workspace import Workspace
 
-
 # ---------------------------------------------------------------------------
 # 1. validate — "Check my code for errors"
 # ---------------------------------------------------------------------------
+_SEVERITY_NAMES: dict[str, int] = {
+    "error": 1,
+    "warning": 2,
+    "information": 3,
+    "info": 3,
+    "hint": 4,
+}
+
+
+def _filter_by_severity(
+    diagnostics: list[Diagnostic], min_severity: str | None,
+) -> list[Diagnostic]:
+    """Filter diagnostics to only include those at or above min_severity."""
+    if not min_severity:
+        return diagnostics
+    threshold = _SEVERITY_NAMES.get(min_severity.lower())
+    if threshold is None:
+        return diagnostics
+    return [d for d in diagnostics if d.severity.value <= threshold]
+
+
 async def validate(
     ws: Workspace,
     file_path: str | None = None,
     directory: str | None = None,
     extensions: list[str] | None = None,
     max_files: int = 100,
+    min_severity: str | None = None,
 ) -> str:
     """Run LSP diagnostics on a file, directory, or entire workspace.
 
     - file_path → rich contextual diagnostics per error (definition, hover, fixes)
     - directory → bulk scan with plain diagnostics
     - neither → scan the workspace root
+    - min_severity → filter: "error", "warning", "information", "hint"
     """
     if file_path:
         from codebrain.skills.contextual_diagnostics import (
@@ -37,6 +59,12 @@ async def validate(
         )
 
         contexts = await _ctx_diag(ws.reporter, Path(file_path))
+        if min_severity:
+            contexts = [
+                c for c in contexts
+                if _SEVERITY_NAMES.get(min_severity.lower(), 99)
+                >= c.diagnostic.severity.value
+            ]
         if not contexts:
             return "No diagnostics found."
         return "\n\n---\n\n".join(format_diagnostic_context(c) for c in contexts)
@@ -49,6 +77,7 @@ async def validate(
     all_diags: list[Diagnostic] = []
     for diags in results.values():
         all_diags.extend(diags)
+    all_diags = _filter_by_severity(all_diags, min_severity)
     return format_diagnostics(all_diags)
 
 

@@ -113,16 +113,20 @@ def create_server(
         directory: str | None = None,
         extensions: list[str] | None = None,
         max_files: int = 100,
+        min_severity: str | None = None,
     ) -> str:
         """Check code for errors.
 
         Use file_path for rich per-error context, or directory for a bulk scan.
+        min_severity filters results: "error", "warning", "information", or "hint" (default: all).
         """
         t0 = time.monotonic()
         file_path = _resolve(file_path)
         directory = _resolve(directory)
         ws = await _get_ws(file_path or directory)
-        result = await _c.validate(ws, file_path, directory, extensions, max_files)
+        result = await _c.validate(
+            ws, file_path, directory, extensions, max_files, min_severity,
+        )
         _trace("validate", {"file_path": file_path, "directory": directory}, t0, result)
         return result
 

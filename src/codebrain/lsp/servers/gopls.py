@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from codebrain.core.models import Diagnostic, DiagnosticSeverity, Position, Range
 from codebrain.lsp.servers.base import LSPReporter
@@ -27,6 +28,42 @@ class GoplsReporter(LSPReporter):
     ) -> None:
         command = server_command or ["gopls", "serve"]
         super().__init__(workspace_root, command, "go")
+
+    def _build_initialization_options(
+        self, effective_root: Path,
+    ) -> dict[str, Any] | None:
+        """Configure gopls with sensible defaults for better module resolution."""
+        import os
+        import shutil
+
+        opts: dict[str, Any] = {}
+
+        # Tell gopls where to find the Go module cache if set
+        gomodcache = os.environ.get("GOMODCACHE")
+        if gomodcache:
+            opts["env"] = {"GOMODCACHE": gomodcache}
+
+        # Auto-detect GOROOT from `go env GOROOT` if not set
+        goroot = os.environ.get("GOROOT")
+        if not goroot:
+            go_bin = shutil.which("go")
+            if go_bin:
+                import subprocess
+
+                try:
+                    result = subprocess.run(
+                        [go_bin, "env", "GOROOT"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        goroot = result.stdout.strip()
+                except Exception:
+                    pass
+
+        if goroot:
+            opts.setdefault("env", {})["GOROOT"] = goroot
+
+        return opts or None
 
     @property
     def name(self) -> str:
