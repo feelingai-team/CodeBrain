@@ -41,10 +41,12 @@ class LSPClient:
         notification_handlers: (
             dict[str, Callable[[dict[str, Any] | list[Any]], None]] | None
         ) = None,
+        initialization_options: dict[str, Any] | None = None,
     ) -> None:
         self._server_command = server_command
         self._workspace_root = workspace_root
         self._notification_handlers = notification_handlers or {}
+        self._initialization_options = initialization_options
         self._process: asyncio.subprocess.Process | None = None
         self._request_id: int = 0
         self._pending_requests: dict[int, asyncio.Future[Any]] = {}
@@ -126,6 +128,7 @@ class LSPClient:
         params = lsp.InitializeParams(
             process_id=None,
             root_uri=self._workspace_root.as_uri(),
+            initialization_options=self._initialization_options,
             capabilities=lsp.ClientCapabilities(
                 text_document=lsp.TextDocumentClientCapabilities(
                     synchronization=lsp.TextDocumentSyncClientCapabilities(

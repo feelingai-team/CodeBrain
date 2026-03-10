@@ -130,6 +130,12 @@ class LSPReporter(ContextAwareDiagnosticReporter):
 
         return self._workspace_root
 
+    def _build_initialization_options(
+        self, effective_root: Path
+    ) -> dict[str, Any] | None:
+        """Build LSP initialization options. Override in subclasses for server-specific settings."""
+        return None
+
     # -- Lifecycle --
 
     async def start(self) -> None:
@@ -142,6 +148,7 @@ class LSPReporter(ContextAwareDiagnosticReporter):
             notification_handlers={
                 "textDocument/publishDiagnostics": self._handle_diagnostics,
             },
+            initialization_options=self._build_initialization_options(effective_root),
         )
         await self._client.start()
 
