@@ -35,26 +35,31 @@ class PyrightReporter(LSPReporter):
     def _build_initialization_options(
         self, effective_root: Path
     ) -> dict[str, Any] | None:
-        """Pass venv and extraPaths settings to pyright-langserver."""
-        settings: dict[str, Any] = {}
+        """Build pyright-langserver settings.
+
+        Settings are sent both as initializationOptions and via
+        workspace/didChangeConfiguration (pyright reads the latter).
+
+        NOTE: python.analysis.extraPaths via LSP is ignored when a
+        pyrightconfig.json exists — in that case pyright reads extraPaths
+        from the config file instead.
+        """
+        python_settings: dict[str, Any] = {
+            "analysis": {
+                # Add project root as import search path so top-level
+                # packages resolve without pyproject.toml/editable install
+                "extraPaths": [str(effective_root)],
+                "autoSearchPaths": True,
+            },
+        }
 
         # Auto-detect venv and configure python path
         venv_dir = effective_root / ".venv"
         if venv_dir.is_dir():
             python_bin = venv_dir / "bin" / "python"
             if python_bin.exists():
-                settings["python"] = {"pythonPath": str(python_bin)}
-            settings["venvPath"] = str(effective_root)
-            settings["venv"] = ".venv"
+                python_settings["pythonPath"] = str(python_bin)
+            python_settings["venvPath"] = str(effective_root)
             logger.info("Pyright: detected venv at %s", venv_dir)
 
-        # Always add the project root as an extra search path so that
-        # top-level packages (e.g. `space_llm/`) resolve without needing
-        # a pyproject.toml or editable install.
-        python_settings: dict[str, Any] = settings.get("python", {})
-        python_settings["analysis"] = {
-            "extraPaths": [str(effective_root)],
-        }
-        settings["python"] = python_settings
-
-        return {"settings": settings}
+        return {"settings": {"python": python_settings}}

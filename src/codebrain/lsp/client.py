@@ -172,6 +172,18 @@ class LSPClient:
         init_result = _converter.structure(result, lsp.InitializeResult)
         self._server_capabilities = init_result.capabilities
         await self._notify("initialized", lsp.InitializedParams())
+
+        # Push settings via didChangeConfiguration — many language servers
+        # (including pyright-langserver) only pick up settings from this
+        # notification, not from initializationOptions alone.
+        if self._initialization_options and "settings" in self._initialization_options:
+            await self._notify(
+                "workspace/didChangeConfiguration",
+                lsp.DidChangeConfigurationParams(
+                    settings=self._initialization_options["settings"],
+                ),
+            )
+
         self._initialized = True
 
     # -- Internal read/write loop --
