@@ -182,7 +182,7 @@ class SymbolIndex:
         assert self._rank_cache is not None
         return self._rank_cache
 
-    def generate_repomap(self, max_chars: int = 4096) -> str:
+    def generate_repomap(self, max_chars: int = 8192) -> str:
         """Generate a repomap from the cached index (no re-scan needed)."""
         scores = self.get_ranks()
 

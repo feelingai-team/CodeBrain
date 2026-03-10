@@ -213,3 +213,81 @@ async def search_symbol(
     # Sort by score descending, then truncate
     scored.sort(key=lambda x: x[0], reverse=True)
     return [sym for _, sym in scored[:max_results]]
+
+
+# ---------------------------------------------------------------------------
+# Identifier search — matches ALL identifier usages in the AST
+# ---------------------------------------------------------------------------
+
+@dataclass
+class IdentifierMatch:
+    """An identifier usage found in the workspace (not just definitions)."""
+
+    name: str
+    file_path: str
+    line: int  # 0-indexed
+    context: str  # The source line containing the identifier
+
+
+async def search_identifiers(
+    workspace_root: Path,
+    query: str,
+    language: str | None = None,
+    max_results: int = 100,
+    parser: TreeSitterParser | None = None,
+) -> list[IdentifierMatch]:
+    """Search for identifier usages (method calls, variable refs, field access) by name.
+
+    Unlike search_symbol which only finds definitions, this searches ALL identifiers
+    in the AST including method selectors (db.Offset), field access (obj.prop), etc.
+    """
+    from codebrain.search.repomap import IDENTIFIER_NODE_TYPES
+
+    ts_parser = parser or get_default_parser()
+    files = _collect_language_files(workspace_root, language)
+
+    scored: list[tuple[int, IdentifierMatch]] = []
+    for file_path, lang in files:
+        source = file_path.read_bytes()
+        tree = ts_parser.parse(source, lang)
+        lines = source.decode("utf-8", errors="replace").splitlines()
+
+        # Track seen (file, line) to deduplicate multiple matches on the same line
+        seen_lines: set[int] = set()
+
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            node_type = getattr(node, "type", "")
+
+            if node_type in IDENTIFIER_NODE_TYPES:
+                start = getattr(node, "start_byte", 0)
+                end = getattr(node, "end_byte", 0)
+                name = source[start:end].decode("utf-8", errors="replace")
+                if name:
+                    matched, score = _matches_query(name, query)
+                    if matched:
+                        line_num = getattr(node, "start_point", (0,))[0]
+                        if line_num not in seen_lines:
+                            seen_lines.add(line_num)
+                            ctx = lines[line_num].strip() if line_num < len(lines) else ""
+                            if len(ctx) > 200:
+                                ctx = ctx[:197] + "..."
+                            scored.append((
+                                score,
+                                IdentifierMatch(
+                                    name=name,
+                                    file_path=str(file_path),
+                                    line=line_num,
+                                    context=ctx,
+                                ),
+                            ))
+
+            children = getattr(node, "children", [])
+            stack.extend(reversed(children))
+
+        if len(scored) >= max_results:
+            break
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [m for _, m in scored[:max_results]]

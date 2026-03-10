@@ -181,7 +181,7 @@ async def explore_symbol(
 async def outline(
     ws: Workspace,
     file_path: str | None = None,
-    max_chars: int = 4096,
+    max_chars: int = 8192,
 ) -> str:
     """Get a symbol outline for a file, or a ranked repository map.
 
@@ -277,12 +277,15 @@ async def search(
     kind: str | None = None,
     file_paths: list[str] | None = None,
     pattern_mode: bool = False,
+    scope: str = "definitions",
     max_results: int = 100,
 ) -> str:
-    """Search for symbols by name or structural patterns via tree-sitter.
+    """Search for code by name or structural patterns via tree-sitter.
 
-    - pattern_mode=False (default) → symbol name search
-    - pattern_mode=True → tree-sitter query (requires language)
+    - pattern_mode=True → tree-sitter S-expression query (requires language)
+    - scope="definitions" (default) → symbol definitions (functions, classes, types)
+    - scope="identifiers" → ALL identifier usages (method calls, variable refs, field access)
+    - scope="all" → both definitions and identifier usages
     """
     root = Path(ws.info.root_path)
 
@@ -301,16 +304,36 @@ async def search(
             lines.append(f"- `{m.file_path}:{m.start_line + 1}`: ```{m.text[:120]}```")
         return "\n".join(lines)
 
-    from codebrain.tools.search import search_symbol as _search_sym
+    parts: list[str] = []
 
-    symbols = await _search_sym(root, query, kind, language, max_results)
-    if not symbols:
-        return "No symbols found."
-    lines = []
-    for s in symbols:
-        sig = f" — `{s.signature}`" if s.signature else ""
-        lines.append(f"- **{s.name}** ({s.kind}) at `{s.file_path}:{s.line + 1}`{sig}")
-    return "\n".join(lines)
+    # Symbol definitions
+    if scope in ("definitions", "all"):
+        from codebrain.tools.search import search_symbol as _search_sym
+
+        symbols = await _search_sym(root, query, kind, language, max_results)
+        if symbols:
+            if scope == "all":
+                parts.append("**Definitions:**")
+            for s in symbols:
+                sig = f" — `{s.signature}`" if s.signature else ""
+                parts.append(
+                    f"- **{s.name}** ({s.kind}) at `{s.file_path}:{s.line + 1}`{sig}"
+                )
+
+    # Identifier usages
+    if scope in ("identifiers", "all"):
+        from codebrain.tools.search import search_identifiers as _search_idents
+
+        idents = await _search_idents(root, query, language, max_results)
+        if idents:
+            if scope == "all":
+                parts.append(f"\n**Identifier usages** ({len(idents)}):")
+            for m in idents:
+                parts.append(f"- `{m.file_path}:{m.line + 1}`: `{m.context}`")
+
+    if not parts:
+        return "No matches found."
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------

@@ -221,7 +221,7 @@ class TestOutline:
         mock_ws.index.generate_repomap.return_value = "# Repository Map\n## main.py"
         result = await outline(mock_ws)
         assert "Repository Map" in result
-        mock_ws.index.generate_repomap.assert_called_once_with(4096)
+        mock_ws.index.generate_repomap.assert_called_once_with(8192)
 
     async def test_no_file_falls_back_to_generate_repomap(self, mock_ws: MagicMock) -> None:
         mock_ws.index.is_built = False
@@ -366,7 +366,7 @@ class TestSearch:
             return_value=[],
         ):
             result = await search(mock_ws, "nonexistent_xyz")
-            assert "No symbols" in result
+            assert "No matches" in result
 
 
 # ===========================================================================

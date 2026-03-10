@@ -136,6 +136,14 @@ class LSPReporter(ContextAwareDiagnosticReporter):
         """Build LSP initialization options. Override in subclasses for server-specific settings."""
         return None
 
+    def _build_subprocess_env(self, effective_root: Path) -> dict[str, str] | None:
+        """Build extra environment variables for the LSP subprocess.
+
+        Override in subclasses to inject language-specific env vars (e.g. GO111MODULE).
+        Returns None by default (inherit parent environment).
+        """
+        return None
+
     # -- Lifecycle --
 
     async def start(self) -> None:
@@ -149,6 +157,7 @@ class LSPReporter(ContextAwareDiagnosticReporter):
                 "textDocument/publishDiagnostics": self._handle_diagnostics,
             },
             initialization_options=self._build_initialization_options(effective_root),
+            extra_env=self._build_subprocess_env(effective_root),
         )
         await self._client.start()
 

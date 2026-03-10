@@ -29,21 +29,17 @@ class GoplsReporter(LSPReporter):
         command = server_command or ["gopls", "serve"]
         super().__init__(workspace_root, command, "go")
 
-    def _build_initialization_options(
-        self, effective_root: Path,
-    ) -> dict[str, Any] | None:
-        """Configure gopls with sensible defaults for better module resolution."""
+    def _build_subprocess_env(self, effective_root: Path) -> dict[str, str] | None:
+        """Ensure gopls runs in Go modules mode with correct env vars."""
         import os
         import shutil
 
-        opts: dict[str, Any] = {}
+        env: dict[str, str] = {"GO111MODULE": "on"}
 
-        # Tell gopls where to find the Go module cache if set
         gomodcache = os.environ.get("GOMODCACHE")
         if gomodcache:
-            opts["env"] = {"GOMODCACHE": gomodcache}
+            env["GOMODCACHE"] = gomodcache
 
-        # Auto-detect GOROOT from `go env GOROOT` if not set
         goroot = os.environ.get("GOROOT")
         if not goroot:
             go_bin = shutil.which("go")
@@ -61,9 +57,19 @@ class GoplsReporter(LSPReporter):
                     pass
 
         if goroot:
-            opts.setdefault("env", {})["GOROOT"] = goroot
+            env["GOROOT"] = goroot
 
-        return opts or None
+        return env
+
+    def _build_initialization_options(
+        self, effective_root: Path,
+    ) -> dict[str, Any] | None:
+        """Configure gopls build settings for module-aware mode."""
+        return {
+            "build": {
+                "env": {"GO111MODULE": "on"},
+            },
+        }
 
     @property
     def name(self) -> str:

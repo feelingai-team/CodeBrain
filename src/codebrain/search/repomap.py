@@ -86,6 +86,17 @@ def _extract_definitions(
     return symbols
 
 
+# Node types that represent identifiers (names) in the AST.
+# Used for cross-reference edges in repomap and for identifier search.
+IDENTIFIER_NODE_TYPES: frozenset[str] = frozenset({
+    "identifier",
+    "type_identifier",
+    "field_identifier",       # Go: db.Offset(), struct.Field
+    "property_identifier",    # JS/TS: obj.prop
+    "shorthand_property_identifier",  # JS: { prop } destructuring
+})
+
+
 def _collect_identifiers(source: bytes, parser: TreeSitterParser, language: str) -> set[str]:
     """Collect all identifier names from a file's AST."""
     tree = parser.parse(source, language)
@@ -94,7 +105,7 @@ def _collect_identifiers(source: bytes, parser: TreeSitterParser, language: str)
     while stack:
         node = stack.pop()
         node_type = getattr(node, "type", "")
-        if node_type == "identifier" or node_type == "type_identifier":
+        if node_type in IDENTIFIER_NODE_TYPES:
             start = getattr(node, "start_byte", 0)
             end = getattr(node, "end_byte", 0)
             name = source[start:end].decode("utf-8", errors="replace")
@@ -203,7 +214,7 @@ class RepomapEntry:
 
 async def generate_repomap(
     workspace_root: Path,
-    max_chars: int = 4096,
+    max_chars: int = 8192,
     parser: TreeSitterParser | None = None,
 ) -> str:
     """Generate a concise repository map ranked by symbol importance.

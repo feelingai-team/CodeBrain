@@ -13,7 +13,7 @@ from codebrain.search.parser import (
     language_for_extension,
 )
 from codebrain.search.pattern import search_pattern
-from codebrain.search.symbol import search_symbol
+from codebrain.search.symbol import search_identifiers, search_symbol
 from codebrain.search.symbols import get_document_symbols
 
 SAMPLE_PYTHON = """\
@@ -256,7 +256,7 @@ class TestSymbolSearch:
         )
         # "StreamParser" is exact for first, "StreamValidator" only matches via substring "Stream"
         results = await search_symbol(tmp_path, "StreamParser|Stream")
-        # Both should match, but StreamParser (exact=100) should rank above StreamValidator (substr=80)
+        # StreamParser (exact=100) should rank above StreamValidator (substr=80)
         assert results[0].name == "StreamParser"
 
 
@@ -293,3 +293,84 @@ class TestDocumentSymbols:
         greeter = next(s for s in symbols if s.name == "Greeter")
         assert greeter.range.start.line == 0
         assert greeter.selection_range.start.line == 0
+
+
+# --- Identifier search tests ---
+
+
+SAMPLE_GO = """\
+package main
+
+import "fmt"
+
+func handleRequest(db *Database) {
+    offset := db.Offset(10)
+    limit := db.Limit(20)
+    results := db.Query().Order("created_at")
+    fmt.Println(results, offset, limit)
+}
+"""
+
+SAMPLE_PYTHON_IDENTS = """\
+class ApiService:
+    def get_items(self, offset: int, limit: int):
+        return self.db.query().offset(offset).limit(limit)
+
+def process(service: ApiService):
+    items = service.get_items(offset=0, limit=50)
+    return items
+"""
+
+
+class TestIdentifierSearch:
+    async def test_finds_method_calls(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        results = await search_identifiers(tmp_path, "offset", language="python")
+        assert len(results) > 0
+        # Should find usages, not just the definition
+        assert any(r.name == "offset" for r in results)
+
+    async def test_pipe_or_query(self, tmp_path: Path) -> None:
+        # Use separate files so identifiers are on distinct lines
+        (tmp_path / "a.py").write_text("def get_offset():\n    return offset_val\n")
+        (tmp_path / "b.py").write_text("def get_limit():\n    return limit_val\n")
+        results = await search_identifiers(tmp_path, "offset|limit", language="python")
+        names = {r.name for r in results}
+        # pipe OR should match both alternatives
+        assert "offset_val" in names or "get_offset" in names
+        assert "limit_val" in names or "get_limit" in names
+
+    async def test_deduplicates_same_line(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        results = await search_identifiers(tmp_path, "offset", language="python")
+        # Each line should appear at most once
+        lines = [r.line for r in results]
+        assert len(lines) == len(set(lines))
+
+    async def test_max_results(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        results = await search_identifiers(tmp_path, "offset|limit", max_results=2)
+        assert len(results) <= 2
+
+    async def test_language_filter(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        (tmp_path / "other.go").write_text(SAMPLE_GO)
+        py_results = await search_identifiers(tmp_path, "offset", language="python")
+        go_results = await search_identifiers(tmp_path, "offset", language="go")
+        # Python results should only be from .py files
+        for r in py_results:
+            assert r.file_path.endswith(".py")
+        for r in go_results:
+            assert r.file_path.endswith(".go")
+
+    async def test_context_line_included(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        results = await search_identifiers(tmp_path, "ApiService", language="python")
+        assert len(results) > 0
+        # Context should contain actual source code
+        assert any("ApiService" in r.context for r in results)
+
+    async def test_no_matches(self, tmp_path: Path) -> None:
+        (tmp_path / "main.py").write_text(SAMPLE_PYTHON_IDENTS)
+        results = await search_identifiers(tmp_path, "nonexistent_xyz")
+        assert results == []

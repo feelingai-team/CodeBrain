@@ -167,7 +167,7 @@ def create_server(
     @mcp.tool
     async def outline(
         file_path: str | None = None,
-        max_chars: int = 4096,
+        max_chars: int = 8192,
     ) -> str:
         """Get a symbol outline for a file, or a ranked repository map of the whole workspace."""
         t0 = time.monotonic()
@@ -205,9 +205,14 @@ def create_server(
         kind: str | None = None,
         file_paths: list[str] | None = None,
         pattern_mode: bool = False,
+        scope: str = "definitions",
         max_results: int = 100,
     ) -> str:
-        """Search for code symbols (functions, classes, variables) by name.
+        """Search for code by name.
+
+        Default searches symbol definitions (functions, classes, types).
+        Use scope="identifiers" to find ALL identifier usages (method calls, variable refs).
+        Use scope="all" for both definitions and usages.
 
         Query modes:
           search(query="HandleMotion")                  # exact/substring match
@@ -215,7 +220,7 @@ def create_server(
           search(query="StreamParser|FrameParser")      # pipe OR (best match wins)
           search(query="Motion*")                       # glob pattern
 
-        Use kind to filter (e.g. kind="function", kind="class").
+        Use kind to filter definitions (e.g. kind="function", kind="class").
         Set pattern_mode=True for tree-sitter structural queries (requires language).
         """
         t0 = time.monotonic()
@@ -223,7 +228,9 @@ def create_server(
             file_paths = [_resolve(p) or p for p in file_paths]
         first_path = file_paths[0] if file_paths else None
         ws = await _get_ws(first_path)
-        result = await _c.search(ws, query, language, kind, file_paths, pattern_mode, max_results)
+        result = await _c.search(
+            ws, query, language, kind, file_paths, pattern_mode, scope, max_results,
+        )
         _trace("search", {"query": query, "pattern_mode": pattern_mode}, t0, result)
         return result
 

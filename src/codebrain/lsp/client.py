@@ -42,11 +42,13 @@ class LSPClient:
             dict[str, Callable[[dict[str, Any] | list[Any]], None]] | None
         ) = None,
         initialization_options: dict[str, Any] | None = None,
+        extra_env: dict[str, str] | None = None,
     ) -> None:
         self._server_command = server_command
         self._workspace_root = workspace_root
         self._notification_handlers = notification_handlers or {}
         self._initialization_options = initialization_options
+        self._extra_env = extra_env
         self._process: asyncio.subprocess.Process | None = None
         self._request_id: int = 0
         self._pending_requests: dict[int, asyncio.Future[Any]] = {}
@@ -82,16 +84,22 @@ class LSPClient:
         """Build environment for the LSP subprocess, detecting virtual environments."""
         import os
 
-        venv_dir = self._workspace_root / ".venv"
-        if not venv_dir.is_dir():
-            return None  # inherit parent env
+        env: dict[str, str] | None = None
 
-        env = os.environ.copy()
-        env["VIRTUAL_ENV"] = str(venv_dir)
-        # Prepend venv bin to PATH so the LSP server finds venv packages
-        venv_bin = venv_dir / "bin"
-        if venv_bin.is_dir():
-            env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+        venv_dir = self._workspace_root / ".venv"
+        if venv_dir.is_dir():
+            env = os.environ.copy()
+            env["VIRTUAL_ENV"] = str(venv_dir)
+            # Prepend venv bin to PATH so the LSP server finds venv packages
+            venv_bin = venv_dir / "bin"
+            if venv_bin.is_dir():
+                env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+
+        if self._extra_env:
+            if env is None:
+                env = os.environ.copy()
+            env.update(self._extra_env)
+
         return env
 
     async def stop(self) -> None:
