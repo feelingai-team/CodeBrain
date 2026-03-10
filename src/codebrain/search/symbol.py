@@ -89,13 +89,60 @@ def _extract_signature(node: object, source: bytes) -> str:
     return first_line
 
 
-def _matches_query(name: str, query: str) -> bool:
-    """Check if a symbol name matches the search query (case-insensitive glob)."""
-    # Support glob patterns
-    if any(c in query for c in "*?["):
-        return fnmatch(name.lower(), query.lower())
-    # Plain substring match
-    return query.lower() in name.lower()
+def _match_single(name_lower: str, term: str) -> tuple[bool, int]:
+    """Match a single search term against a lowered symbol name.
+
+    Returns (matched, score). Handles exact, substring, glob, and multi-keyword.
+    """
+    term = term.strip()
+    if not term:
+        return (False, 0)
+
+    # Glob patterns
+    if any(c in term for c in "*?["):
+        return (fnmatch(name_lower, term), 80)
+
+    # Exact match
+    if name_lower == term:
+        return (True, 100)
+
+    # Substring match
+    if term in name_lower:
+        return (True, 80)
+
+    # Multi-keyword: split on whitespace/underscores/hyphens, all must match
+    keywords = term.replace("_", " ").replace("-", " ").split()
+    if len(keywords) > 1:
+        if all(kw in name_lower for kw in keywords):
+            return (True, 60)
+
+    return (False, 0)
+
+
+def _matches_query(name: str, query: str) -> tuple[bool, int]:
+    """Check if a symbol name matches the search query.
+
+    Returns (matched, score) where higher score = better match.
+
+    Supports:
+    - Exact/substring match: "StreamParser"
+    - Glob patterns: "Stream*"
+    - Multi-keyword (AND): "stream parser" — all keywords must appear
+    - Pipe-separated (OR): "StreamParser|FrameParser" — best match wins
+    """
+    name_lower = name.lower()
+    query_lower = query.lower()
+
+    # Pipe-separated OR: evaluate each alternative, return best match
+    if "|" in query_lower:
+        best_score = 0
+        for alt in query_lower.split("|"):
+            matched, score = _match_single(name_lower, alt)
+            if matched and score > best_score:
+                best_score = score
+        return (best_score > 0, best_score)
+
+    return _match_single(name_lower, query_lower)
 
 
 def _collect_language_files(
@@ -126,11 +173,8 @@ async def search_symbol(
     ts_parser = parser or get_default_parser()
     files = _collect_language_files(workspace_root, language)
 
-    symbols: list[SymbolInfo] = []
+    scored: list[tuple[int, SymbolInfo]] = []
     for file_path, lang in files:
-        if len(symbols) >= max_results:
-            break
-
         node_types = SYMBOL_NODE_TYPES.get(lang, {})
         if not node_types:
             continue
@@ -140,28 +184,32 @@ async def search_symbol(
 
         # Walk the tree looking for symbol definition nodes
         stack = [tree.root_node]
-        while stack and len(symbols) < max_results:
+        while stack:
             node = stack.pop()
             node_type = getattr(node, "type", "")
             symbol_kind = node_types.get(node_type)
 
             if symbol_kind is not None:
                 name = _extract_symbol_name(node, source)
-                if name and _matches_query(name, query):
-                    if kind is None or kind == symbol_kind:
+                if name:
+                    matched, score = _matches_query(name, query)
+                    if matched and (kind is None or kind == symbol_kind):
                         sig = _extract_signature(node, source)
-                        symbols.append(
+                        scored.append((
+                            score,
                             SymbolInfo(
                                 name=name,
                                 kind=symbol_kind,
                                 file_path=str(file_path),
                                 line=getattr(node, "start_point", (0,))[0],
                                 signature=sig,
-                            )
-                        )
+                            ),
+                        ))
 
             # Add children in reverse so we process left-to-right
             children = getattr(node, "children", [])
             stack.extend(reversed(children))
 
-    return symbols
+    # Sort by score descending, then truncate
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [sym for _, sym in scored[:max_results]]

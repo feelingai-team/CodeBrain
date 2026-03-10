@@ -18,9 +18,12 @@ This returns a ranked workspace map. Use it to identify where your feature fits.
 
 **Step 2 — Find related code.** Search for symbols related to your feature:
 ```
-search(query="<relevant function or type name>")
+search(query="StreamParser")                  # exact/substring match
+search(query="stream parser")                 # multi-keyword AND
+search(query="StreamParser|FrameParser")      # pipe OR (best match wins)
+search(query="Stream*")                       # glob pattern
 ```
-For each key symbol, get its full type info:
+For each key symbol you find, get its full type info and definition:
 ```
 explore_symbol(file_path="<file>", symbol_query="<name>")
 ```
@@ -102,7 +105,7 @@ Then run tests.
 | Tool | What it does | Key parameters |
 |------|-------------|----------------|
 | `outline` | Workspace map or file symbol tree | `file_path` (optional) |
-| `search` | Find symbols by name | `query`, `kind`, `language` |
+| `search` | Find symbols by name or keywords (all must match) | `query`, `kind`, `language` |
 | `explore_symbol` | Definition + type info + callers | `file_path` + `line` + `character` (0-indexed), or `file_path` + `symbol_query` |
 | `check_impact` | What breaks if symbol changes | `file_path` + `line` + `character` |
 | `validate` | Type-check via LSP | `file_path` (single) or `directory` + `extensions` (bulk) |

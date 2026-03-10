@@ -203,9 +203,16 @@ def create_server(
         pattern_mode: bool = False,
         max_results: int = 100,
     ) -> str:
-        """Search for symbols by name, or structural patterns via tree-sitter.
+        """Search for code symbols (functions, classes, variables) by name.
 
-        Set pattern_mode=True for tree-sitter queries (requires language).
+        Query modes:
+          search(query="HandleMotion")                  # exact/substring match
+          search(query="motion handler")                # multi-keyword AND
+          search(query="StreamParser|FrameParser")      # pipe OR (best match wins)
+          search(query="Motion*")                       # glob pattern
+
+        Use kind to filter (e.g. kind="function", kind="class").
+        Set pattern_mode=True for tree-sitter structural queries (requires language).
         """
         t0 = time.monotonic()
         if file_paths:

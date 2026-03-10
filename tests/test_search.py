@@ -182,6 +182,83 @@ class TestSymbolSearch:
         assert add_sym.signature is not None
         assert "def add" in add_sym.signature
 
+    async def test_multi_keyword_query(self, tmp_path: Path) -> None:
+        (tmp_path / "handlers.py").write_text(
+            "class MotionHandler:\n    pass\n\n"
+            "class MotionPreview:\n    pass\n\n"
+            "def handle_motion_data():\n    pass\n\n"
+            "def unrelated_func():\n    pass\n"
+        )
+        # "motion handler" — both keywords must appear in name
+        results = await search_symbol(tmp_path, "motion handler")
+        names = [s.name for s in results]
+        assert "MotionHandler" in names  # contains both "motion" and "handler"
+        assert "MotionPreview" not in names  # missing "handler"
+        assert "unrelated_func" not in names
+
+        # "motion data" — matches handle_motion_data
+        results2 = await search_symbol(tmp_path, "motion data")
+        names2 = [s.name for s in results2]
+        assert "handle_motion_data" in names2
+
+    async def test_multi_keyword_all_must_match(self, tmp_path: Path) -> None:
+        (tmp_path / "api.py").write_text(
+            "def get_motion_preview():\n    pass\n\n"
+            "def get_status():\n    pass\n"
+        )
+        results = await search_symbol(tmp_path, "motion preview")
+        names = [s.name for s in results]
+        assert "get_motion_preview" in names
+        assert "get_status" not in names
+
+    async def test_exact_match_ranks_higher(self, tmp_path: Path) -> None:
+        (tmp_path / "models.py").write_text(
+            "class MotionDataHandler:\n    pass\n\n"
+            "class Motion:\n    pass\n"
+        )
+        results = await search_symbol(tmp_path, "Motion")
+        # Exact match "Motion" should come before substring match "MotionDataHandler"
+        assert results[0].name == "Motion"
+
+    async def test_single_keyword_still_works(self, py_workspace: Path) -> None:
+        results = await search_symbol(py_workspace, "greet")
+        assert any(s.name == "greet" for s in results)
+
+    async def test_pipe_or_query(self, tmp_path: Path) -> None:
+        (tmp_path / "parsers.py").write_text(
+            "class StreamParser:\n    pass\n\n"
+            "class FrameParser:\n    pass\n\n"
+            "class Validator:\n    pass\n"
+        )
+        results = await search_symbol(tmp_path, "StreamParser|FrameParser")
+        names = [s.name for s in results]
+        assert "StreamParser" in names
+        assert "FrameParser" in names
+        assert "Validator" not in names
+
+    async def test_pipe_or_with_keywords(self, tmp_path: Path) -> None:
+        (tmp_path / "handlers.py").write_text(
+            "class MotionHandler:\n    pass\n\n"
+            "class FrameParser:\n    pass\n\n"
+            "def unrelated():\n    pass\n"
+        )
+        # Mix: first alt is multi-keyword, second is exact
+        results = await search_symbol(tmp_path, "motion handler|FrameParser")
+        names = [s.name for s in results]
+        assert "MotionHandler" in names
+        assert "FrameParser" in names
+        assert "unrelated" not in names
+
+    async def test_pipe_or_best_score_wins(self, tmp_path: Path) -> None:
+        (tmp_path / "models.py").write_text(
+            "class StreamParser:\n    pass\n\n"
+            "class StreamValidator:\n    pass\n"
+        )
+        # "StreamParser" is exact for first, "StreamValidator" only matches via substring "Stream"
+        results = await search_symbol(tmp_path, "StreamParser|Stream")
+        # Both should match, but StreamParser (exact=100) should rank above StreamValidator (substr=80)
+        assert results[0].name == "StreamParser"
+
 
 # --- Document symbols tests ---
 

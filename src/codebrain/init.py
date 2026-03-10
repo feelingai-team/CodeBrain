@@ -170,7 +170,10 @@ outline()
 
 **Step 2 — Find related code.**
 ```
-search(query="<relevant function or class name>")
+search(query="HandleMotion")                  # exact/substring match
+search(query="motion handler")                # multi-keyword AND
+search(query="StreamParser|FrameParser")      # pipe OR (best match wins)
+search(query="Motion*")                       # glob pattern
 explore_symbol(file_path="<file>", symbol_query="<name>")
 ```
 
@@ -217,7 +220,7 @@ check_impact(file_path="<file>", line=<line>, character=<col>")
 | Tool | What it does |
 |------|-------------|
 | `outline` | Workspace map or file symbol tree |
-| `search` | Find symbols by name |
+| `search` | Find symbols by name or keywords (all must match) |
 | `explore_symbol` | Definition + type info + callers |
 | `check_impact` | What breaks if symbol changes |
 | `validate` | Type-check via LSP |
