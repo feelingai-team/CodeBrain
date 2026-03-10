@@ -36,6 +36,7 @@ all = [
 
 [project.scripts]
 codebrain-mcp = "codebrain.mcp.cli:main"
+codebrain = "codebrain.mcp.cli:main"
 
 [dependency-groups]
 dev = [
