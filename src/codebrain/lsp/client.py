@@ -64,14 +64,33 @@ class LSPClient:
     # -- Lifecycle --
 
     async def start(self) -> None:
+        env = self._build_env()
         self._process = await asyncio.create_subprocess_exec(
             *self._server_command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=self._workspace_root,
+            env=env,
         )
         self._reader_task = asyncio.create_task(self._read_loop())
         await self._initialize()
+
+    def _build_env(self) -> dict[str, str] | None:
+        """Build environment for the LSP subprocess, detecting virtual environments."""
+        import os
+
+        venv_dir = self._workspace_root / ".venv"
+        if not venv_dir.is_dir():
+            return None  # inherit parent env
+
+        env = os.environ.copy()
+        env["VIRTUAL_ENV"] = str(venv_dir)
+        # Prepend venv bin to PATH so the LSP server finds venv packages
+        venv_bin = venv_dir / "bin"
+        if venv_bin.is_dir():
+            env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+        return env
 
     async def stop(self) -> None:
         if not self.is_running:
