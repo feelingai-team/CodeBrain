@@ -33,11 +33,9 @@ def create_server(
 
     @asynccontextmanager
     async def _lifespan(_server: FastMCP) -> AsyncIterator[None]:
-        initial_root = Path(workspace_root).resolve()
-
-        # Start the initial workspace
-        await manager.get_workspace_for_file(initial_root)
-
+        # Don't eagerly start language servers — they'll start lazily
+        # on the first tool call. This keeps lifespan fast (< 1s) so
+        # the MCP connection doesn't time out.
         store = get_store()
 
         try:
