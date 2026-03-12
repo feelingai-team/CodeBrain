@@ -29,7 +29,7 @@ def _cmd_server(args: argparse.Namespace) -> None:
 
 def _cmd_init(args: argparse.Namespace) -> None:
     """Initialize CodeBrain configuration in a project."""
-    from codebrain.init import init_project
+    from codebrain.bootstrap import init_project
 
     result = init_project(
         root=Path(args.directory),
