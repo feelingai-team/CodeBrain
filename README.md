@@ -126,7 +126,7 @@ The server communicates over stdio using the MCP JSON-RPC protocol. Point any MC
 | `--workspace <path>` | Project root (default: current directory) |
 | `--languages <lang ...>` | Limit to specific language servers (e.g. `python typescript cpp`) |
 
-See [doc/installation.md](doc/installation.md) for the full reference.
+See [docs/installation.md](docs/installation.md) for the full reference.
 
 ## Open Source Roadmap
 
