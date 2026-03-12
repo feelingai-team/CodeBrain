@@ -9,6 +9,7 @@ description = "LSP-based code validation and structural syntax search"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "pydantic>=2.0",
     "lsprotocol>=2023.0.0",
