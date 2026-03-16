@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
@@ -112,7 +112,7 @@ class TestHealthReport:
     def test_health_report(self) -> None:
         report = HealthReport(
             workspace_root=Path("/mono"),
-            timestamp=datetime.now(tz=timezone.utc),
+            timestamp=datetime.now(tz=UTC),
             sub_projects=[
                 SubProjectHealth(
                     root=Path("/mono/backend"),
