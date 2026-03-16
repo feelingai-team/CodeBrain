@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from codebrain.core.models import SubProject
 from codebrain.lsp.servers.multi import MultiLanguageReporter
 from codebrain.lsp.servers.pyright import PyrightReporter
 
@@ -38,6 +39,7 @@ except ImportError:
 def build_multi_reporter(
     workspace_root: Path,
     languages: list[str] | None = None,
+    sub_project: SubProject | None = None,
 ) -> MultiLanguageReporter:
     """Build a MultiLanguageReporter for the requested languages at the given root."""
     langs = languages or list(_LANGUAGE_FACTORIES.keys())
@@ -47,5 +49,19 @@ def build_multi_reporter(
         if factory is None:
             logger.warning("No reporter factory for language: %s", lang)
             continue
-        reporters.append(factory(workspace_root))
+
+        # Pass toolchain env to reporter if available
+        kwargs: dict = {}
+        if sub_project:
+            tc = sub_project.toolchain
+            if lang == "python" and tc.python_env:
+                kwargs["python_env"] = tc.python_env
+            elif lang == "go" and tc.go_env:
+                kwargs["go_env"] = tc.go_env
+            elif lang == "typescript" and tc.node_env:
+                kwargs["node_env"] = tc.node_env
+            elif lang == "cpp" and tc.cpp_env:
+                kwargs["cpp_env"] = tc.cpp_env
+
+        reporters.append(factory(workspace_root, **kwargs))
     return MultiLanguageReporter(workspace_root, reporters)
