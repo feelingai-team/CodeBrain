@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from enum import IntEnum
-from typing import Any
+from datetime import datetime
+from enum import IntEnum, StrEnum
+from pathlib import Path
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -190,3 +192,90 @@ class WorkspaceInfo(BaseModel):
     name: str | None = None
     languages: list[str] | None = None
     lsp_overrides: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class Language(StrEnum):
+    """Canonical language identifiers used across the system."""
+
+    PYTHON = "python"
+    TYPESCRIPT = "typescript"
+    GO = "go"
+    CPP = "cpp"
+
+
+class PythonEnv(BaseModel):
+    """Detected Python environment for a sub-project."""
+
+    venv_path: Path | None = None
+    python_binary: Path | None = None
+    pyright_config: Path | None = None
+    manager: str | None = None
+
+
+class NodeEnv(BaseModel):
+    """Detected Node.js/TypeScript environment for a sub-project."""
+
+    node_modules: Path | None = None
+    tsconfig: Path | None = None
+    package_manager: str | None = None
+
+
+class GoEnv(BaseModel):
+    """Detected Go environment for a sub-project."""
+
+    go_mod: Path | None = None
+    go_work: Path | None = None
+    goroot: Path | None = None
+    gomodcache: Path | None = None
+
+
+class CppEnv(BaseModel):
+    """Detected C/C++ environment for a sub-project."""
+
+    compile_commands: Path | None = None
+    clangd_config: Path | None = None
+    cmake_presets: Path | None = None
+
+
+class ToolchainConfig(BaseModel):
+    """Resolved environment for a sub-project."""
+
+    python_env: PythonEnv | None = None
+    node_env: NodeEnv | None = None
+    go_env: GoEnv | None = None
+    cpp_env: CppEnv | None = None
+    extra_config: dict[str, Path] = Field(default_factory=dict)
+
+
+class SubProject(BaseModel):
+    """A detected sub-project within a workspace."""
+
+    root: Path
+    languages: list[Language]
+    markers: dict[str, Path]
+    toolchain: ToolchainConfig
+    parent: Path | None = None
+
+
+class LanguageHealth(BaseModel):
+    """Health status for a single language in a sub-project."""
+
+    status: Literal["active", "degraded", "unavailable"]
+    server: str
+    fallback: str | None = None
+    hints: list[str] = Field(default_factory=list)
+
+
+class SubProjectHealth(BaseModel):
+    """Health status for a single sub-project."""
+
+    root: Path
+    languages: dict[str, LanguageHealth]
+
+
+class HealthReport(BaseModel):
+    """Full health report for a workspace."""
+
+    workspace_root: Path
+    timestamp: datetime
+    sub_projects: list[SubProjectHealth] = Field(default_factory=list)
