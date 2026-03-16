@@ -66,8 +66,17 @@ async def look_then_jump(
     outline = await document_symbols(reporter, file_path)
     flat = _flatten_symbols(outline)
 
-    # Step 2: Match
+    # Step 2: Match — if LSP symbols don't contain the query, retry with tree-sitter
+    # (LSP servers like Pyright omit private/underscore symbols from documentSymbol)
     matched = [sym for sym in flat if _matches_query(sym.name, symbol_query)]
+    if not matched and symbol_query:
+        from codebrain.search.symbols import get_document_symbols as ts_get_symbols
+
+        ts_outline = await ts_get_symbols(file_path)
+        ts_flat = _flatten_symbols(ts_outline)
+        matched = [sym for sym in ts_flat if _matches_query(sym.name, symbol_query)]
+        if matched:
+            outline = ts_outline
 
     # Step 3: Jump — resolve each match
     results: list[SymbolJumpResult] = []

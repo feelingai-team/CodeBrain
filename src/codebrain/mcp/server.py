@@ -80,7 +80,7 @@ def create_server(
         if manager.workspaces:
             return manager.workspaces[0]
 
-        ws = manager.add_workspace(Path(".").resolve())
+        ws = manager.add_workspace(Path(workspace_root).resolve())
         await ws.start()
         return ws
 

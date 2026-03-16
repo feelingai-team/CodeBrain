@@ -41,6 +41,7 @@ codebrain = "codebrain.mcp.cli:main"
 
 [dependency-groups]
 dev = [
+    "codebrain[mcp,search]",
     "pytest>=9.0",
     "pytest-asyncio>=1.3.0",
     "pyright>=1.1.400",
@@ -66,3 +67,7 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "mcp_stdio: MCP stdio integration tests",
+    "scenario: scenario tests requiring external projects",
+]

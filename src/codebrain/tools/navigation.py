@@ -108,8 +108,8 @@ async def document_symbols(
     assert lsp_reporter._client is not None
 
     lsp_symbols = await lsp_reporter._client.get_document_symbols(file_path)
-    if lsp_symbols is None:
-        # Fallback to tree-sitter
+    if not lsp_symbols:
+        # Fallback to tree-sitter (also covers empty list — LSP may omit private symbols)
         from codebrain.search.symbols import get_document_symbols as ts_get_symbols
 
         return await ts_get_symbols(file_path)
