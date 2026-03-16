@@ -263,4 +263,134 @@ def create_server(
         )
         return format_rename_result(result)
 
+    # ==================================================================
+    # Tool: check_health
+    # ==================================================================
+    @mcp.tool
+    async def check_health(workspace_path: str | None = None) -> str:
+        """Check language server health for all sub-projects.
+
+        Returns status (active/degraded/unavailable) per language per sub-project,
+        with remediation hints for any issues.
+        """
+        import datetime as _dt
+
+        from codebrain.core.models import HealthReport, LanguageHealth, SubProjectHealth
+        from codebrain.fallback.hints import get_hints
+
+        ws = await _get_ws(workspace_path)
+        root = Path(ws.info.root_path)
+
+        # Trigger scan if not done
+        if not manager.registry._sub_projects:
+            await manager.registry.scan(root)
+
+        sub_projects = [
+            sp for sp in manager.registry._sub_projects
+            if sp.root.is_relative_to(root)
+        ]
+        sp_healths: list[SubProjectHealth] = []
+
+        # Dummy extension map for checking reporter availability
+        _lang_ext: dict[str, str] = {
+            "python": "x.py", "go": "x.go", "typescript": "x.ts", "cpp": "x.cpp",
+        }
+
+        for sp in sub_projects:
+            lang_health: dict[str, LanguageHealth] = {}
+            for lang in sp.languages:
+                from typing import Literal, cast
+
+                ext_file = _lang_ext.get(lang.value, "x")
+                reporter = ws.reporter.get_reporter_for_file(Path(ext_file))
+                status_val: Literal["active", "degraded", "unavailable"]
+                if reporter is None:
+                    status_val = "unavailable"
+                    hints = get_hints(lang.value, "server_missing")
+                    server_name = lang.value
+                elif hasattr(reporter, "status"):
+                    # FallbackChain exposes .status
+                    raw_status = getattr(reporter, "status", "unavailable")
+                    status_val = cast(
+                        Literal["active", "degraded", "unavailable"],
+                        raw_status if raw_status in ("active", "degraded", "unavailable")
+                        else "unavailable",
+                    )
+                    hints = getattr(reporter, "hints", [])
+                    server_name = reporter.name
+                elif hasattr(reporter, "is_running") and reporter.is_running:
+                    status_val = "active"
+                    hints = []
+                    server_name = reporter.name
+                else:
+                    status_val = "unavailable"
+                    hints = get_hints(lang.value, "server_missing")
+                    server_name = reporter.name
+
+                lang_health[lang.value] = LanguageHealth(
+                    status=status_val,
+                    server=server_name,
+                    hints=hints,
+                )
+            sp_healths.append(SubProjectHealth(root=sp.root, languages=lang_health))
+
+        report = HealthReport(
+            workspace_root=root,
+            timestamp=_dt.datetime.now(tz=_dt.UTC),
+            sub_projects=sp_healths,
+        )
+
+        lines = [f"# Health Report: {root.name}", ""]
+        for sph in report.sub_projects:
+            try:
+                rel = sph.root.relative_to(root)
+            except ValueError:
+                rel = sph.root
+            lines.append(f"## {rel}")
+            for lang, lh in sph.languages.items():
+                icon = {"active": "✅", "degraded": "⚠️", "unavailable": "❌"}.get(
+                    lh.status, "?"
+                )
+                lines.append(f"  {icon} {lang}: {lh.status} ({lh.server})")
+                for hint in lh.hints:
+                    lines.append(f"    → {hint}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    # ==================================================================
+    # Tool: list_subprojects
+    # ==================================================================
+    @mcp.tool
+    async def list_subprojects(workspace_path: str | None = None) -> str:
+        """List all detected sub-projects in the workspace with their languages."""
+        ws = await _get_ws(workspace_path)
+        root = Path(ws.info.root_path)
+
+        # Trigger scan if not done
+        if not manager.registry._sub_projects:
+            await manager.registry.scan(root)
+
+        sub_projects = [
+            sp for sp in manager.registry._sub_projects
+            if sp.root.is_relative_to(root)
+        ]
+
+        if not sub_projects:
+            return "No sub-projects detected."
+
+        lines = [f"Sub-projects in {root.name}:", ""]
+        for sp in sorted(sub_projects, key=lambda s: str(s.root)):
+            rel = sp.root.relative_to(root) if sp.root != root else Path(".")
+            langs = ", ".join(lang.value for lang in sp.languages)
+            markers = ", ".join(sp.markers.keys())
+            lines.append(f"- **{rel}** [{langs}] (markers: {markers})")
+            if sp.parent:
+                try:
+                    parent_rel = sp.parent.relative_to(root)
+                    lines.append(f"  parent: {parent_rel}")
+                except ValueError:
+                    lines.append(f"  parent: {sp.parent}")
+        return "\n".join(lines)
+
     return mcp
