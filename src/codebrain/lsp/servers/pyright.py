@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from codebrain.core.models import PythonEnv
 from codebrain.lsp.servers.base import LSPReporter
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,11 @@ class PyrightReporter(LSPReporter):
         self,
         workspace_root: Path,
         server_command: list[str] | None = None,
+        python_env: PythonEnv | None = None,
     ) -> None:
         command = server_command or ["pyright-langserver", "--stdio"]
         super().__init__(workspace_root, command, "python")
+        self._python_env = python_env
 
     @property
     def name(self) -> str:
@@ -53,13 +56,21 @@ class PyrightReporter(LSPReporter):
             },
         }
 
-        # Auto-detect venv and configure python path
-        venv_dir = effective_root / ".venv"
-        if venv_dir.is_dir():
-            python_bin = venv_dir / "bin" / "python"
-            if python_bin.exists():
-                python_settings["pythonPath"] = str(python_bin)
-            python_settings["venvPath"] = str(effective_root)
-            logger.info("Pyright: detected venv at %s", venv_dir)
+        # Use PythonEnv if provided, else fall back to hardcoded .venv detection
+        if self._python_env and self._python_env.venv_path:
+            venv_dir = self._python_env.venv_path
+            if self._python_env.python_binary:
+                python_settings["pythonPath"] = str(self._python_env.python_binary)
+            python_settings["venvPath"] = str(venv_dir.parent)
+            logger.info("Pyright: using venv from toolchain: %s", venv_dir)
+        else:
+            # Legacy: hardcoded .venv detection
+            venv_dir = effective_root / ".venv"
+            if venv_dir.is_dir():
+                python_bin = venv_dir / "bin" / "python"
+                if python_bin.exists():
+                    python_settings["pythonPath"] = str(python_bin)
+                python_settings["venvPath"] = str(effective_root)
+                logger.info("Pyright: detected venv at %s", venv_dir)
 
         return {"settings": {"python": python_settings}}

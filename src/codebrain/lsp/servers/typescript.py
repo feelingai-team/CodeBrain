@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codebrain.core.models import NodeEnv
 from codebrain.lsp.servers.base import LSPReporter
 
 # LSP spec languageId values per extension
@@ -24,9 +25,11 @@ class TypeScriptReporter(LSPReporter):
         self,
         workspace_root: Path,
         server_command: list[str] | None = None,
+        node_env: NodeEnv | None = None,
     ) -> None:
         command = server_command or ["typescript-language-server", "--stdio"]
         super().__init__(workspace_root, command, "typescript")
+        self._node_env = node_env
 
     @property
     def name(self) -> str:

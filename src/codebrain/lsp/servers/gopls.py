@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from codebrain.core.models import Diagnostic, DiagnosticSeverity, Position, Range
+from codebrain.core.models import Diagnostic, DiagnosticSeverity, GoEnv, Position, Range
 from codebrain.lsp.servers.base import LSPReporter
 
 # Patterns in gopls diagnostics that indicate missing module dependencies
@@ -25,9 +25,11 @@ class GoplsReporter(LSPReporter):
         self,
         workspace_root: Path,
         server_command: list[str] | None = None,
+        go_env: GoEnv | None = None,
     ) -> None:
         command = server_command or ["gopls", "serve"]
         super().__init__(workspace_root, command, "go")
+        self._go_env = go_env
 
     def _build_subprocess_env(self, effective_root: Path) -> dict[str, str] | None:
         """Ensure gopls runs in Go modules mode with correct env vars."""
@@ -36,28 +38,36 @@ class GoplsReporter(LSPReporter):
 
         env: dict[str, str] = {"GO111MODULE": "on"}
 
-        gomodcache = os.environ.get("GOMODCACHE")
-        if gomodcache:
-            env["GOMODCACHE"] = gomodcache
+        # Use GoEnv.gomodcache if provided, else fall back to env var
+        if self._go_env and self._go_env.gomodcache:
+            env["GOMODCACHE"] = str(self._go_env.gomodcache)
+        else:
+            gomodcache = os.environ.get("GOMODCACHE")
+            if gomodcache:
+                env["GOMODCACHE"] = gomodcache
 
-        goroot = os.environ.get("GOROOT")
-        if not goroot:
-            go_bin = shutil.which("go")
-            if go_bin:
-                import subprocess
+        # Use GoEnv.goroot if provided, else fall back to detection
+        if self._go_env and self._go_env.goroot:
+            env["GOROOT"] = str(self._go_env.goroot)
+        else:
+            goroot = os.environ.get("GOROOT")
+            if not goroot:
+                go_bin = shutil.which("go")
+                if go_bin:
+                    import subprocess
 
-                try:
-                    result = subprocess.run(
-                        [go_bin, "env", "GOROOT"],
-                        capture_output=True, text=True, timeout=5,
-                    )
-                    if result.returncode == 0 and result.stdout.strip():
-                        goroot = result.stdout.strip()
-                except Exception:
-                    pass
+                    try:
+                        result = subprocess.run(
+                            [go_bin, "env", "GOROOT"],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            goroot = result.stdout.strip()
+                    except Exception:
+                        pass
 
-        if goroot:
-            env["GOROOT"] = goroot
+            if goroot:
+                env["GOROOT"] = goroot
 
         return env
 

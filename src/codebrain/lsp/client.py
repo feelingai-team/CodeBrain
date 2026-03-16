@@ -11,6 +11,7 @@ from typing import Any
 from lsprotocol import converters
 from lsprotocol import types as lsp
 
+from codebrain.core.models import PythonEnv
 from codebrain.lsp.protocol import (
     JsonRpcNotification,
     JsonRpcRequest,
@@ -43,12 +44,14 @@ class LSPClient:
         ) = None,
         initialization_options: dict[str, Any] | None = None,
         extra_env: dict[str, str] | None = None,
+        python_env: PythonEnv | None = None,
     ) -> None:
         self._server_command = server_command
         self._workspace_root = workspace_root
         self._notification_handlers = notification_handlers or {}
         self._initialization_options = initialization_options
         self._extra_env = extra_env
+        self._python_env = python_env
         self._process: asyncio.subprocess.Process | None = None
         self._request_id: int = 0
         self._pending_requests: dict[int, asyncio.Future[Any]] = {}
@@ -86,8 +89,16 @@ class LSPClient:
 
         env: dict[str, str] | None = None
 
-        venv_dir = self._workspace_root / ".venv"
-        if venv_dir.is_dir():
+        # Use provided python_env if available, else legacy .venv detection
+        venv_dir = None
+        if self._python_env and self._python_env.venv_path:
+            venv_dir = self._python_env.venv_path
+        else:
+            candidate = self._workspace_root / ".venv"
+            if candidate.is_dir():
+                venv_dir = candidate
+
+        if venv_dir and venv_dir.is_dir():
             env = os.environ.copy()
             env["VIRTUAL_ENV"] = str(venv_dir)
             # Prepend venv bin to PATH so the LSP server finds venv packages

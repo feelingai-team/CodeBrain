@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codebrain.core.models import CppEnv
 from codebrain.lsp.servers.base import LSPReporter
 
 
@@ -16,9 +17,11 @@ class ClangdReporter(LSPReporter):
         self,
         workspace_root: Path,
         server_command: list[str] | None = None,
+        cpp_env: CppEnv | None = None,
     ) -> None:
         command = server_command or ["clangd", "--background-index"]
         super().__init__(workspace_root, command, "cpp")
+        self._cpp_env = cpp_env
 
     @property
     def name(self) -> str:
