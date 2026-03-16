@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from codebrain.core.models import WorkspaceInfo
+from codebrain.core.registry import SubProjectRegistry
 from codebrain.lsp.factory import build_multi_reporter
 from codebrain.lsp.servers.multi import MultiLanguageReporter
 from codebrain.search.index import FileWatcher, SymbolIndex
@@ -74,6 +75,7 @@ class WorkspaceManager:
     def __init__(self, initial_root: Path | None = None) -> None:
         self._workspaces: dict[Path, Workspace] = {}
         self._default_languages: list[str] | None = None
+        self.registry: SubProjectRegistry = SubProjectRegistry()
 
         if initial_root:
             self.add_workspace(initial_root)
@@ -112,27 +114,38 @@ class WorkspaceManager:
     async def get_workspace_for_file(
         self, file_path: Path, auto_discover: bool = True
     ) -> Workspace | None:
-        """Resolve which workspace a file belongs to (longest prefix match)."""
+        """Resolve which workspace a file belongs to (registry-first, then longest prefix match)."""
         file_path = file_path.resolve()
-        
-        # 1. Find best existing match
+
+        # Check registry for sub-project awareness
+        sub_project = self.registry.resolve(file_path)
+        if sub_project:
+            for root, ws in self._workspaces.items():
+                if sub_project.root.is_relative_to(root):
+                    if not ws._is_running:
+                        await ws.start()
+                    return ws
+
+        # Fall back to existing longest-prefix match
         best_root: Path | None = None
         for root in self._workspaces:
             if file_path.is_relative_to(root):
                 if best_root is None or len(str(root)) > len(str(best_root)):
                     best_root = root
-        
+
         if best_root:
             ws = self._workspaces[best_root]
             if not ws._is_running:
                 await ws.start()
             return ws
 
-        # 2. Try auto-discovery
+        # Try auto-discovery
         if auto_discover:
             discovered_root = discover_project_root(file_path)
             if discovered_root:
                 ws = self.add_workspace(discovered_root)
+                # Scan for sub-projects on auto-discovery
+                await self.registry.scan(discovered_root)
                 await ws.start()
                 return ws
 
