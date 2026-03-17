@@ -95,6 +95,30 @@ def _extract_symbol_name(hover_text: str) -> str:
     return ""
 
 
+def _find_symbol_at(symbol: Any, line: int, character: int) -> str | None:
+    """Find the most specific DocumentSymbol containing the given position."""
+    from lsprotocol import types as lsp_types
+
+    if not isinstance(symbol, lsp_types.DocumentSymbol):
+        return None
+
+    # Check if position is within this symbol's range
+    r = symbol.range
+    if (r.start.line > line or r.end.line < line
+            or (r.start.line == line and r.start.character > character)
+            or (r.end.line == line and r.end.character < character)):
+        return None
+
+    # Check children for more specific match
+    if symbol.children:
+        for child in symbol.children:
+            found = _find_symbol_at(child, line, character)
+            if found:
+                return found
+
+    return symbol.name
+
+
 def _read_identifier_at(file_path: Path, line: int, character: int) -> str:
     """Read the identifier at a specific position from source code."""
     try:
@@ -550,28 +574,47 @@ class LSPReporter(ContextAwareDiagnosticReporter):
             target_line = line
             target_char = character
 
-        # 2. Extract symbol name from hover — use multiple strategies
+        # 2. Extract symbol name — prefer LSP call hierarchy (structured), fall back to hover
         symbol_name = ""
         try:
-            hover = await self._client.get_hover(target_path, target_line, target_char)
-            if hover is not None:
-                text = ""
-                if isinstance(hover.contents, str):
-                    text = hover.contents
-                elif isinstance(hover.contents, lsp.MarkupContent):
-                    text = hover.contents.value
-                symbol_name = _extract_symbol_name(text)
+            # prepareCallHierarchy returns the exact symbol identity at position
+            items = await self._client.get_document_symbols(target_path)
+            if items:
+                # Find the symbol whose range contains our position
+                from lsprotocol import types as lsp_types
 
-                # Fallback: try to read the identifier from source
-                if not symbol_name:
-                    symbol_name = _read_identifier_at(
-                        target_path, target_line, target_char
-                    )
+                for item in items:
+                    if isinstance(item, lsp_types.DocumentSymbol):
+                        found = _find_symbol_at(item, target_line, target_char)
+                        if found:
+                            symbol_name = found
+                            break
         except Exception:
-            logger.debug("Error extracting symbol name", exc_info=True)
+            logger.debug("Error getting document symbols for name", exc_info=True)
 
-        # Last resort: read from source directly
         if not symbol_name:
+            try:
+                # Try call hierarchy — works for functions/methods
+                prepare_params = lsp.CallHierarchyPrepareParams(
+                    text_document=lsp.TextDocumentIdentifier(
+                        uri=target_path.as_uri()
+                    ),
+                    position=lsp.Position(line=target_line, character=target_char),
+                )
+                ch_items = await self._client._request(
+                    "textDocument/prepareCallHierarchy", prepare_params
+                )
+                if ch_items and isinstance(ch_items, list) and ch_items:
+                    from lsprotocol import converters as lsp_conv
+
+                    conv = lsp_conv.get_converter()
+                    ch_item = conv.structure(ch_items[0], lsp.CallHierarchyItem)
+                    symbol_name = ch_item.name
+            except Exception:
+                logger.debug("Error getting call hierarchy for name", exc_info=True)
+
+        if not symbol_name:
+            # Last resort: read identifier from source
             symbol_name = _read_identifier_at(target_path, target_line, target_char)
 
         # 3. Get references from the definition location (not cursor)
