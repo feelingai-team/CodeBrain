@@ -41,27 +41,36 @@ distribute(
 
 CodeBrain exposes 9 tools (validate, outline, search, explore_symbol, check_impact, debug_trace, rename_symbol, add_workspace, list_workspaces) via the [Model Context Protocol](https://modelcontextprotocol.io/). Any MCP-compatible agent can use them.
 
-### From source (current)
-
-Clone the repo and install in editable mode:
+### Step 1: Install CodeBrain
 
 ```bash
-git clone https://github.com/feelingai-team/CodeBrain.git
-cd CodeBrain
-uv pip install -e ".[all]"
+pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
 ```
 
-### Claude Code
+This installs the `codebrain-mcp` command. Verify with:
 
-**One-liner** — register globally so it's available in every session:
+```bash
+codebrain-mcp --help
+```
+
+> **For contributors** — clone and install in editable mode instead:
+> ```bash
+> git clone https://github.com/feelingai-team/CodeBrain.git
+> cd CodeBrain
+> pip install -e ".[all]"
+> ```
+
+### Step 2: Register with Your Agent
+
+#### Claude Code
+
+**Global** — available in every session:
 
 ```bash
 claude mcp add --transport stdio codebrain -- codebrain-mcp
 ```
 
-Claude Code starts the MCP server in your project's working directory, so CodeBrain automatically targets the right codebase — no `--workspace` flag needed.
-
-**Project-scoped** (shared with your team via git) — add `.mcp.json` to your project root:
+**Project-scoped** — add `.mcp.json` to your project root (shared with your team via git):
 
 ```json
 {
@@ -75,26 +84,19 @@ Claude Code starts the MCP server in your project's working directory, so CodeBr
 }
 ```
 
-> **After PyPI publish** you can use `uvx` instead (no pre-install needed):
-> ```bash
-> claude mcp add --transport stdio codebrain -- uvx "codebrain[mcp,search]"
-> ```
+Claude Code starts the MCP server in your project's working directory, so CodeBrain automatically targets the right codebase — no `--workspace` flag needed.
 
-**Verify it works** — start a new Claude Code session and run:
+**Verify** — start a new Claude Code session and run `/mcp`. You should see `codebrain` listed with 9 tools.
 
-```
-/mcp
-```
+#### OpenCode
 
-You should see `codebrain` listed with 9 tools.
-
-### OpenCode
+**CLI:**
 
 ```bash
 opencode mcp add codebrain --type local --command "codebrain-mcp"
 ```
 
-Or add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
+**Config file** — add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
 
 ```json
 {
@@ -109,13 +111,9 @@ Or add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
 }
 ```
 
-> **After PyPI publish**, replace `"codebrain-mcp"` with `["uvx", "codebrain[mcp,search]"]`.
-
-### Manual / Other Agents
+#### Other MCP Clients
 
 ```bash
-pip install -e ".[all]"       # from source
-# pip install codebrain[mcp,search]  # after PyPI publish
 codebrain-mcp --workspace /path/to/project
 ```
 
@@ -126,7 +124,7 @@ The server communicates over stdio using the MCP JSON-RPC protocol. Point any MC
 | `--workspace <path>` | Project root (default: current directory) |
 | `--languages <lang ...>` | Limit to specific language servers (e.g. `python typescript cpp`) |
 
-See [docs/installation.md](docs/installation.md) for the full reference.
+See [docs/installation.md](docs/installation.md) for the full reference, including CLAUDE.md integration and available tools.
 
 ## Open Source Roadmap
 

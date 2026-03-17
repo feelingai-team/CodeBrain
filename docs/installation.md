@@ -1,38 +1,88 @@
 # Installation
 
-## Claude Code
+## Prerequisites
 
-### One-liner (recommended)
+CodeBrain requires language servers for the languages you want to analyze:
+
+| Language | Install |
+|----------|---------|
+| Python | `npm install -g pyright` or `uv tool install pyright` |
+| Go | `go install golang.org/x/tools/gopls@latest` |
+| C/C++ | Install `clangd` via your system package manager |
+| TypeScript/JS | `npm install -g typescript-language-server typescript` |
+
+You only need the servers for the languages in your project.
+
+## Step 1: Install CodeBrain
 
 ```bash
-claude mcp add --transport stdio codebrain -- uvx "codebrain[mcp,search]"
+pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
 ```
 
-### Via plugin
+Or install specific extras:
 
 ```bash
-/plugin install https://github.com/feelingai-team/CodeBrain
+pip install "codebrain[mcp] @ git+https://github.com/feelingai-team/CodeBrain.git"         # MCP server only
+pip install "codebrain[search] @ git+https://github.com/feelingai-team/CodeBrain.git"       # tree-sitter search only
+pip install "codebrain[mcp,search] @ git+https://github.com/feelingai-team/CodeBrain.git"   # both, without watchfiles
 ```
 
-### Project-scoped (shared with team)
+Verify the installation:
 
-Add `.mcp.json` to your project root:
+```bash
+codebrain-mcp --help
+```
+
+> **For contributors** — clone and install in editable mode instead:
+> ```bash
+> git clone https://github.com/feelingai-team/CodeBrain.git
+> cd CodeBrain
+> pip install -e ".[all]"
+> ```
+
+## Step 2: Register with Your Agent
+
+### Claude Code
+
+**Global** — available in every Claude Code session:
+
+```bash
+claude mcp add --transport stdio codebrain -- codebrain-mcp
+```
+
+**Project-scoped** — add `.mcp.json` to your project root (commits with your repo so teammates get it automatically):
 
 ```json
 {
   "mcpServers": {
     "codebrain": {
       "type": "stdio",
-      "command": "uvx",
-      "args": ["codebrain[mcp,search]"]
+      "command": "codebrain-mcp",
+      "args": []
     }
   }
 }
 ```
 
-## OpenCode
+Claude Code starts the MCP server in your project's working directory, so CodeBrain automatically targets the right codebase — no `--workspace` flag needed.
 
-Add to your `opencode.json` (project root or `~/.config/opencode/opencode.json`):
+**Verify** — start a new Claude Code session and run:
+
+```
+/mcp
+```
+
+You should see `codebrain` listed with 9 tools.
+
+### OpenCode
+
+**CLI:**
+
+```bash
+opencode mcp add codebrain --type local --command "codebrain-mcp"
+```
+
+**Config file** — add to `opencode.json` (project root or `~/.config/opencode/opencode.json`):
 
 ```json
 {
@@ -40,34 +90,39 @@ Add to your `opencode.json` (project root or `~/.config/opencode/opencode.json`)
   "mcp": {
     "codebrain": {
       "type": "local",
-      "command": ["uvx", "codebrain[mcp,search]"],
+      "command": ["codebrain-mcp"],
       "enabled": true
     }
   }
 }
 ```
 
-Or via CLI:
+### Other MCP Clients
+
+Run the server directly:
 
 ```bash
-opencode mcp add codebrain --type local --command "uvx codebrain[mcp,search]"
-```
-
-## Manual install
-
-```bash
-pip install codebrain[mcp,search]
 codebrain-mcp --workspace /path/to/project
 ```
 
-Or with `uv`:
+The server communicates over stdio using the MCP JSON-RPC protocol. Point any MCP client at this command.
+
+## CLI Options
 
 ```bash
-uv pip install codebrain[all]
-codebrain-mcp --workspace /path/to/project
+codebrain-mcp [--workspace <path>] [--languages <lang1> <lang2> ...]
 ```
 
-## Available tools
+| Flag | Description |
+|------|-------------|
+| `--workspace <path>` | Project root (default: current directory) |
+| `--languages <lang ...>` | Limit to specific language servers (e.g. `python typescript cpp go`) |
+
+## Step 3: Add CLAUDE.md SOPs (Recommended)
+
+Copy the SOPs from [docs/claude-md-snippet.md](claude-md-snippet.md) into your project's `CLAUDE.md`. This teaches Claude Code (and other agents that read CLAUDE.md) to use CodeBrain tools in a structured workflow — validate after every edit, check impact before modifying signatures, etc.
+
+## Available Tools
 
 Once connected, the following MCP tools are available:
 
@@ -83,11 +138,10 @@ Once connected, the following MCP tools are available:
 | `add_workspace` | Add a new workspace root |
 | `list_workspaces` | List active workspaces |
 
-## CLI options
+## Project Scaffolding
+
+Auto-generate `.mcp.json`, `CLAUDE.md`, and hooks for a project:
 
 ```bash
-codebrain-mcp [--workspace <path>] [--languages <lang1> <lang2> ...]
+codebrain init [directory] [--dry-run]
 ```
-
-- `--workspace` — Project root (default: current directory)
-- `--languages` — Limit to specific language servers (e.g. `python typescript cpp`)

@@ -73,10 +73,7 @@ This is the primary usage mode. Any MCP-compatible agent (Claude Code, Cursor, O
 #### Install
 
 ```bash
-# From source
-git clone https://github.com/feelingai-team/CodeBrain.git
-cd CodeBrain
-uv pip install -e ".[all]"
+pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
 ```
 
 #### Register with Claude Code
@@ -84,9 +81,9 @@ uv pip install -e ".[all]"
 ```bash
 # Global — available in every session
 claude mcp add --transport stdio codebrain -- codebrain-mcp
-
-# Or project-scoped — add .mcp.json to your repo root:
 ```
+
+Or project-scoped — add `.mcp.json` to your repo root:
 
 ```json
 {
@@ -100,13 +97,30 @@ claude mcp add --transport stdio codebrain -- codebrain-mcp
 }
 ```
 
-#### Register with other agents
+#### Register with OpenCode
 
 ```bash
-# OpenCode
 opencode mcp add codebrain --type local --command "codebrain-mcp"
+```
 
-# Any MCP client — just run:
+Or add to `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "codebrain": {
+      "type": "local",
+      "command": ["codebrain-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+#### Other MCP clients
+
+```bash
 codebrain-mcp --workspace /path/to/project
 ```
 
@@ -176,10 +190,10 @@ Import CodeBrain directly for custom tooling, scripts, or agent frameworks.
 #### Install
 
 ```bash
-uv pip install -e ".[all]"
+pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
 # or specific extras:
-uv pip install -e ".[search]"  # tree-sitter only
-uv pip install -e ".[mcp]"     # MCP server only
+pip install "codebrain[search] @ git+https://github.com/feelingai-team/CodeBrain.git"  # tree-sitter only
+pip install "codebrain[mcp] @ git+https://github.com/feelingai-team/CodeBrain.git"     # MCP server only
 ```
 
 #### Validate a file
