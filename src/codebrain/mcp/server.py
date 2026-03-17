@@ -318,7 +318,7 @@ def create_server(
                     )
                     hints = getattr(reporter, "hints", [])
                     server_name = reporter.name
-                elif hasattr(reporter, "is_running") and reporter.is_running:
+                elif getattr(reporter, "is_running", False):
                     status_val = "active"
                     hints = []
                     server_name = reporter.name

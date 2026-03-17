@@ -159,8 +159,14 @@ async def explore_symbol(
     if symbol_query and (line is None or character is None):
         from codebrain.skills.look_then_jump import look_then_jump as _ltj
 
-        lsp_r = ws.reporter.get_reporter_for_file(Path(file_path))
-        if lsp_r is None:
+        sub_r = ws.reporter.get_reporter_for_file(Path(file_path))
+        if sub_r is None:
+            return f"No language server for {file_path}"
+        from codebrain.tools.navigation import _get_lsp_reporter as _unwrap
+
+        try:
+            lsp_r = _unwrap(sub_r, Path(file_path))
+        except TypeError:
             return f"No language server for {file_path}"
         result = await _ltj(lsp_r, Path(file_path), symbol_query)
         if not result.matches:
@@ -250,8 +256,27 @@ async def outline(
     if file_path and not Path(file_path).is_dir():
         from codebrain.tools.navigation import document_symbols as _symbols
 
-        syms = await _symbols(ws.reporter, Path(file_path))
-        return format_document_symbols(syms)
+        try:
+            syms = await _symbols(ws.reporter, Path(file_path))
+        except (TypeError, Exception):
+            syms = []
+
+        if syms:
+            return format_document_symbols(syms)
+
+        # Fallback: use tree-sitter index for this file
+        if ws.index.is_built:
+            nodes = ws.index.query(file_path=Path(file_path))
+            if nodes:
+                lines_out: list[str] = []
+                for n in sorted(nodes, key=lambda x: x.line):
+                    sig = f" — `{n.signature}`" if n.signature else ""
+                    lines_out.append(
+                        f"- **{n.name}** ({n.kind}) at line {n.line + 1}{sig}"
+                    )
+                return "\n".join(lines_out)
+
+        return f"No symbols found in {file_path}."
 
     # Workspace-wide repomap (also used when file_path is a directory)
     if ws.index.is_built:
@@ -278,8 +303,14 @@ async def check_impact(
     - check_signature=True adds current signature info
     - Appends code action suggestions for any broken diagnostics
     """
-    lsp_r = ws.reporter.get_reporter_for_file(Path(file_path))
-    if lsp_r is None:
+    from codebrain.tools.navigation import _get_lsp_reporter
+
+    sub_r = ws.reporter.get_reporter_for_file(Path(file_path))
+    if sub_r is None:
+        return f"No language server for {file_path}"
+    try:
+        lsp_r = _get_lsp_reporter(sub_r, Path(file_path))
+    except TypeError:
         return f"No language server for {file_path}"
 
     parts: list[str] = []
@@ -449,13 +480,21 @@ async def debug_trace(
     if lsp_r is None:
         for ext in ws.reporter.supported_extensions:
             r = ws.reporter.get_reporter_for_file(Path(f"dummy{ext}"))
-            if r is not None and r.is_running:
+            if r is not None and getattr(r, "is_running", False):
                 lsp_r = r
                 break
 
     if lsp_r is None:
         return "No language server available for stack trace analysis."
-    result = await _analyze(lsp_r, stack_trace, Path(ws.info.root_path))
+
+    # Unwrap to LSPReporter for stack trace analysis
+    from codebrain.tools.navigation import _get_lsp_reporter
+
+    try:
+        lsp_reporter = _get_lsp_reporter(lsp_r, Path(frames[0].file_path) if frames else None)
+    except TypeError:
+        return "No language server available for stack trace analysis."
+    result = await _analyze(lsp_reporter, stack_trace, Path(ws.info.root_path))
     if not result.frames:
         return "Could not parse any frames from the stack trace."
     parts: list[str] = []

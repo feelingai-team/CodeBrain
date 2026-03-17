@@ -42,6 +42,12 @@ def _get_lsp_reporter(
         sub = reporter.get_reporter_for_file(file_path)
         if sub is not None:
             return _get_lsp_reporter(sub, file_path)
+        msg = f"No language server for {file_path.suffix}"
+        raise TypeError(msg)
+
+    # Duck-typing fallback: if it has LSPReporter-like attributes, use it directly
+    if hasattr(reporter, "_client") and hasattr(reporter, "analyze_signature_change_impact"):
+        return reporter  # type: ignore[return-value]
 
     msg = f"Navigation tools require an LSPReporter, got {type(reporter).__name__}"
     raise TypeError(msg)
