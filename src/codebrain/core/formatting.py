@@ -41,6 +41,32 @@ def _read_source_line(file_path: str, line_number: int) -> str | None:
         return None
 
 
+def read_source_span(
+    file_path: str, center_line: int, context_lines: int = 3,
+) -> str | None:
+    """Read a span of source lines centered on center_line (0-indexed).
+
+    Returns a formatted code block with line numbers, or None if file unreadable.
+    """
+    try:
+        path = Path(file_path)
+        if not path.exists():
+            return None
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        start = max(0, center_line - context_lines)
+        end = min(len(lines), center_line + context_lines + 1)
+        if start >= len(lines):
+            return None
+
+        result_lines: list[str] = []
+        for i in range(start, end):
+            marker = " →" if i == center_line else "  "
+            result_lines.append(f"{marker} {i + 1:4d} │ {lines[i]}")
+        return "\n".join(result_lines)
+    except Exception:
+        return None
+
+
 def format_diagnostics(diagnostics: list[Diagnostic]) -> str:
     """Format diagnostics grouped by code/rule with sampling.
 

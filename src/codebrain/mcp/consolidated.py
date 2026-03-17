@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from codebrain.core.formatting import (
+    _read_source_line,
     format_call_hierarchy,
     format_diagnostic_context,
     format_diagnostics,
     format_document_symbols,
     format_symbol_locations,
+    read_source_span,
 )
 from codebrain.core.models import Diagnostic
 from codebrain.core.workspace import Workspace
@@ -24,6 +26,54 @@ _SEVERITY_NAMES: dict[str, int] = {
     "info": 3,
     "hint": 4,
 }
+
+
+def _get_health_hints(ws: Workspace, file_path: str | None = None) -> tuple[str, str]:
+    """Return (header_warning, footer_note) based on reporter health status.
+
+    header_warning: non-empty when a reporter is unavailable (critical — results may be wrong)
+    footer_note: non-empty when a reporter is degraded (informational — results are partial)
+    """
+    from codebrain.fallback.hints import get_hints
+
+    header = ""
+    footer = ""
+
+    # Determine which reporter to check
+    if file_path:
+        reporter = ws.reporter.get_reporter_for_file(Path(file_path))
+    else:
+        reporter = None
+
+    # Check all reporters if no specific file
+    reporters_to_check = [reporter] if reporter else []
+    if not reporters_to_check:
+        for ext in (".py", ".go", ".ts", ".cpp"):
+            r = ws.reporter.get_reporter_for_file(Path(f"x{ext}"))
+            if r is not None:
+                reporters_to_check.append(r)
+
+    for r in reporters_to_check:
+        if r is None:
+            continue
+        status = getattr(r, "status", None)
+        if status == "unavailable":
+            hints = getattr(r, "hints", None) or get_hints(r.name, "server_missing")
+            hint_text = " ".join(hints[:1]) if hints else ""
+            header = (
+                f"⚠️ **{r.name} language server unavailable** — "
+                f"diagnostics may be incomplete or missing. {hint_text}\n"
+                f"Run `check_health()` for full status.\n"
+            )
+        elif status == "degraded":
+            header = ""  # degraded is not critical
+            footer = (
+                f"\n---\nℹ️ **{r.name}**: using CLI fallback "
+                f"(language server unavailable). Results may be less detailed. "
+                f"Run `check_health()` for details."
+            )
+
+    return header, footer
 
 
 def _filter_by_severity(
@@ -53,6 +103,8 @@ async def validate(
     - neither → scan the workspace root
     - min_severity → filter: "error", "warning", "information", "hint"
     """
+    header, footer = _get_health_hints(ws, file_path)
+
     if file_path:
         from codebrain.skills.contextual_diagnostics import (
             contextual_diagnostics as _ctx_diag,
@@ -66,8 +118,10 @@ async def validate(
                 >= c.diagnostic.severity.value
             ]
         if not contexts:
-            return "No diagnostics found."
-        return "\n\n---\n\n".join(format_diagnostic_context(c) for c in contexts)
+            result = "No diagnostics found."
+            return (header + result + footer) if header or footer else result
+        result = "\n\n---\n\n".join(format_diagnostic_context(c) for c in contexts)
+        return (header + result + footer) if header or footer else result
 
     from codebrain.tools.validation import validate_workspace as _validate_ws
 
@@ -78,7 +132,8 @@ async def validate(
     for diags in results.values():
         all_diags.extend(diags)
     all_diags = _filter_by_severity(all_diags, min_severity)
-    return format_diagnostics(all_diags)
+    result = format_diagnostics(all_diags)
+    return (header + result + footer) if header or footer else result
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +200,10 @@ async def explore_symbol(
     defn = await _goto(ws.reporter, Path(file_path), line, character)
     if defn:
         parts.append(f"**Definition**: `{defn.file_path}:{defn.range.start}`")
+        # Show surrounding source context around the definition
+        span = read_source_span(defn.file_path, defn.range.start.line)
+        if span:
+            parts.append(f"\n**Definition context**:\n```\n{span}\n```")
     else:
         parts.append("**Definition**: not found")
 
@@ -229,23 +288,51 @@ async def check_impact(
         from codebrain.skills.signature_check import signature_check as _sig_check
 
         result = await _sig_check(lsp_r, Path(file_path), line, character)
-        parts.append(f"**Symbol**: {result.impact.symbol_name}")
-        parts.append(
-            f"**Usages**: {result.impact.total_usages} "
-            f"across {len(result.impact.affected_files)} files"
-        )
-        if result.hover_info:
-            parts.append(f"\n**Current signature**:\n```\n{result.hover_info}\n```")
+        impact = result.impact
+        hover_info = result.hover_info
         broken_diags = result.broken_diagnostics
     else:
         from codebrain.skills.impact_analysis import impact_analysis as _impact
 
         impact, broken_diags = await _impact(lsp_r, Path(file_path), line, character)
-        parts.append(f"**Symbol**: {impact.symbol_name}")
-        parts.append(
-            f"**Usages**: {impact.total_usages} "
-            f"across {len(impact.affected_files)} files"
-        )
+        hover_info = None
+
+    # Symbol identity — always explicit
+    symbol_name = impact.symbol_name or "(unknown)"
+    defn_loc = impact.symbol_location
+    parts.append(f"**Symbol**: `{symbol_name}`")
+    parts.append(
+        f"**Definition**: `{defn_loc.file_path}:{defn_loc.range.start}`"
+    )
+
+    if hover_info:
+        parts.append(f"\n**Signature**:\n```\n{hover_info}\n```")
+
+    # Usage summary with per-file breakdown
+    parts.append(
+        f"\n**Usages**: {impact.total_usages} "
+        f"across {len(impact.affected_files)} files"
+    )
+    if impact.affected_files:
+        # Count usages per file
+        usage_by_file: dict[str, int] = {}
+        for u in impact.usages:
+            usage_by_file[u.file_path] = usage_by_file.get(u.file_path, 0) + 1
+        for af in impact.affected_files[:10]:
+            count = usage_by_file.get(af, 0)
+            parts.append(f"  - `{af}` ({count} usages)")
+        if len(impact.affected_files) > 10:
+            parts.append(f"  - ... and {len(impact.affected_files) - 10} more files")
+
+    # Top N usage locations with source lines
+    if impact.usages:
+        max_shown = 5
+        shown = impact.usages[:max_shown]
+        parts.append(f"\n**Top usage locations** (showing {len(shown)}/{impact.total_usages}):")
+        for u in shown:
+            source = _read_source_line(u.file_path, u.range.start.line)
+            source_str = f"\n    > `{source[:100]}`" if source else ""
+            parts.append(f"  - `{u.file_path}:{u.range.start}`{source_str}")
 
     if broken_diags:
         parts.append("\n**Broken diagnostics**:")
