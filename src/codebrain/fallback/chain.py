@@ -42,6 +42,11 @@ class FallbackChain(ContextAwareDiagnosticReporter):
     def supported_extensions(self) -> set[str]:
         return self._primary.supported_extensions
 
+    @property
+    def is_running(self) -> bool:
+        """True when primary is active or fallback is available (degraded)."""
+        return self.status in ("active", "degraded")
+
     async def start(self) -> None:
         try:
             if hasattr(self._primary, "start"):

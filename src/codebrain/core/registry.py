@@ -127,6 +127,11 @@ class SubProjectRegistry:
                 pass
 
             if markers:
+                # Dedup: another concurrent resolve may have already discovered this
+                existing = {sp.root for sp in self._sub_projects}
+                if current in existing:
+                    return next(sp for sp in self._sub_projects if sp.root == current)
+
                 lang_list = sorted(languages, key=lambda lang: lang.value)
                 toolchain = detect_toolchain(current, [lang.value for lang in lang_list])
                 sp = SubProject(

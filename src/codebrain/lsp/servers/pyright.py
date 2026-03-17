@@ -35,6 +35,12 @@ class PyrightReporter(LSPReporter):
     def supported_extensions(self) -> set[str]:
         return {".py", ".pyi"}
 
+    def _build_extra_client_kwargs(self) -> dict[str, Any]:
+        """Pass PythonEnv to LSPClient for subprocess venv activation."""
+        if self._python_env:
+            return {"python_env": self._python_env}
+        return {}
+
     def _build_initialization_options(
         self, effective_root: Path
     ) -> dict[str, Any] | None:

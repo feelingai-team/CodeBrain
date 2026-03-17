@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from codebrain.core.models import NodeEnv
 from codebrain.lsp.servers.base import LSPReporter
@@ -38,6 +39,21 @@ class TypeScriptReporter(LSPReporter):
     @property
     def supported_extensions(self) -> set[str]:
         return {".ts", ".tsx", ".js", ".jsx"}
+
+    def _build_initialization_options(
+        self, effective_root: Path,
+    ) -> dict[str, Any] | None:
+        """Configure typescript-language-server with tsconfig path if known."""
+        if self._node_env and self._node_env.tsconfig:
+            return {
+                "preferences": {
+                    "importModuleSpecifierPreference": "relative",
+                },
+                "tsserver": {
+                    "path": str(self._node_env.tsconfig.parent),
+                },
+            }
+        return None
 
     def _language_id_for_file(self, file_path: Path) -> str:
         """Return the correct LSP languageId based on file extension."""

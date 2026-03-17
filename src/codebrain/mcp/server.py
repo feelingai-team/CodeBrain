@@ -298,11 +298,15 @@ def create_server(
 
         for sp in sub_projects:
             lang_health: dict[str, LanguageHealth] = {}
+            # Use the sub-project's own workspace reporter if it exists
+            sp_ws = manager._workspaces.get(sp.root)
+            sp_reporter = sp_ws.reporter if sp_ws else ws.reporter
+
             for lang in sp.languages:
                 from typing import Literal, cast
 
                 ext_file = _lang_ext.get(lang.value, "x")
-                reporter = ws.reporter.get_reporter_for_file(Path(ext_file))
+                reporter = sp_reporter.get_reporter_for_file(Path(ext_file))
                 status_val: Literal["active", "degraded", "unavailable"]
                 if reporter is None:
                     status_val = "unavailable"

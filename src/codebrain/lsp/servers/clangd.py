@@ -19,7 +19,12 @@ class ClangdReporter(LSPReporter):
         server_command: list[str] | None = None,
         cpp_env: CppEnv | None = None,
     ) -> None:
-        command = server_command or ["clangd", "--background-index"]
+        command = list(server_command or ["clangd", "--background-index"])
+        # Pass compile_commands.json directory to clangd if detected
+        if cpp_env and cpp_env.compile_commands:
+            cc_dir = str(cpp_env.compile_commands.parent)
+            if f"--compile-commands-dir={cc_dir}" not in command:
+                command.append(f"--compile-commands-dir={cc_dir}")
         super().__init__(workspace_root, command, "cpp")
         self._cpp_env = cpp_env
 

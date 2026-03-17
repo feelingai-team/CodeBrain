@@ -157,7 +157,7 @@ class WorkspaceManager:
         best_root: Path | None = None
         for root in self._workspaces:
             if file_path.is_relative_to(root):
-                if best_root is None or len(str(root)) > len(str(best_root)):
+                if best_root is None or len(root.parts) > len(best_root.parts):
                     best_root = root
 
         if best_root:

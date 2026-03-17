@@ -229,6 +229,13 @@ class LSPReporter(ContextAwareDiagnosticReporter):
 
     # -- Lifecycle --
 
+    def _build_extra_client_kwargs(self) -> dict[str, Any]:
+        """Build extra keyword arguments for LSPClient construction.
+
+        Override in subclasses to pass additional kwargs (e.g., python_env).
+        """
+        return {}
+
     async def start(self) -> None:
         if self.is_running:
             return
@@ -241,6 +248,7 @@ class LSPReporter(ContextAwareDiagnosticReporter):
             },
             initialization_options=self._build_initialization_options(effective_root),
             extra_env=self._build_subprocess_env(effective_root),
+            **self._build_extra_client_kwargs(),
         )
         await self._client.start()
 
