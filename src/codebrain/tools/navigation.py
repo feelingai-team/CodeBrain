@@ -25,9 +25,15 @@ def _get_lsp_reporter(
     reporter: ContextAwareDiagnosticReporter,
     file_path: Path | None = None,
 ) -> LSPReporter:
-    """Resolve to an LSPReporter, handling MultiLanguageReporter routing."""
+    """Resolve to an LSPReporter, handling MultiLanguageReporter and FallbackChain."""
     if isinstance(reporter, LSPReporter):
         return reporter
+
+    # Unwrap FallbackChain to get the primary LSPReporter
+    from codebrain.fallback.chain import FallbackChain
+
+    if isinstance(reporter, FallbackChain):
+        return _get_lsp_reporter(reporter.primary, file_path)
 
     # Handle MultiLanguageReporter by routing to the correct sub-reporter
     from codebrain.lsp.servers.multi import MultiLanguageReporter
@@ -35,7 +41,7 @@ def _get_lsp_reporter(
     if isinstance(reporter, MultiLanguageReporter) and file_path is not None:
         sub = reporter.get_reporter_for_file(file_path)
         if sub is not None:
-            return sub
+            return _get_lsp_reporter(sub, file_path)
 
     msg = f"Navigation tools require an LSPReporter, got {type(reporter).__name__}"
     raise TypeError(msg)

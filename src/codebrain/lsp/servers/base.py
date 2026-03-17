@@ -62,6 +62,65 @@ def lsp_severity_to_severity(
     return DiagnosticSeverity(lsp_severity.value)
 
 
+def _extract_symbol_name(hover_text: str) -> str:
+    """Extract a symbol name from LSP hover text using multiple patterns.
+
+    Tries language-specific patterns in order of specificity.
+    """
+    # Python/JS: def foo(...), class Foo, function foo
+    match = re.search(r"(?:def|class|function|func|type|interface|struct)\s+(\w+)", hover_text)
+    if match:
+        return match.group(1)
+
+    # Go: func (r *Receiver) MethodName(...)
+    match = re.search(r"func\s+\([^)]*\)\s+(\w+)", hover_text)
+    if match:
+        return match.group(1)
+
+    # Variable/const assignment: (variable) name: type  or  var name type
+    match = re.search(r"\((?:variable|constant|parameter|property)\)\s+(\w+)", hover_text)
+    if match:
+        return match.group(1)
+
+    # TypeScript: const/let/var name
+    match = re.search(r"(?:const|let|var)\s+(\w+)", hover_text)
+    if match:
+        return match.group(1)
+
+    # First identifier in a code fence block
+    match = re.search(r"```\w*\n.*?(\b[a-zA-Z_]\w*)\b", hover_text, re.DOTALL)
+    if match:
+        return match.group(1)
+
+    return ""
+
+
+def _read_identifier_at(file_path: Path, line: int, character: int) -> str:
+    """Read the identifier at a specific position from source code."""
+    try:
+        if not file_path.exists():
+            return ""
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        if line >= len(lines):
+            return ""
+        src_line = lines[line]
+        if character >= len(src_line):
+            return ""
+
+        # Expand left and right from character to find the full identifier
+        start = character
+        while start > 0 and (src_line[start - 1].isalnum() or src_line[start - 1] == "_"):
+            start -= 1
+        end = character
+        while end < len(src_line) and (src_line[end].isalnum() or src_line[end] == "_"):
+            end += 1
+
+        ident = src_line[start:end]
+        return ident if ident and (ident[0].isalpha() or ident[0] == "_") else ""
+    except Exception:
+        return ""
+
+
 class LSPReporter(ContextAwareDiagnosticReporter):
     """Base class for all LSP-based diagnostic reporters."""
 
@@ -477,24 +536,48 @@ class LSPReporter(ContextAwareDiagnosticReporter):
         assert self._client is not None
         await self.open_file(file_path)
 
+        # 1. Resolve the actual definition to get the true symbol location
+        definition = await self._resolve_definition(file_path, line, character)
+
+        # If we found a definition, use it for references (more precise targeting)
+        if definition is not None:
+            target_path = Path(definition.file_path)
+            target_line = definition.range.start.line
+            target_char = definition.range.start.character
+            await self.open_file(target_path)
+        else:
+            target_path = file_path
+            target_line = line
+            target_char = character
+
+        # 2. Extract symbol name from hover — use multiple strategies
         symbol_name = ""
         try:
-            hover = await self._client.get_hover(file_path, line, character)
+            hover = await self._client.get_hover(target_path, target_line, target_char)
             if hover is not None:
                 text = ""
                 if isinstance(hover.contents, str):
                     text = hover.contents
                 elif isinstance(hover.contents, lsp.MarkupContent):
                     text = hover.contents.value
-                match = re.search(r"(?:def|class|function)\s+(\w+)", text)
-                if match:
-                    symbol_name = match.group(1)
+                symbol_name = _extract_symbol_name(text)
+
+                # Fallback: try to read the identifier from source
+                if not symbol_name:
+                    symbol_name = _read_identifier_at(
+                        target_path, target_line, target_char
+                    )
         except Exception:
             logger.debug("Error extracting symbol name", exc_info=True)
 
+        # Last resort: read from source directly
+        if not symbol_name:
+            symbol_name = _read_identifier_at(target_path, target_line, target_char)
+
+        # 3. Get references from the definition location (not cursor)
         try:
             lsp_refs = await self._client.get_references(
-                file_path, line, character, include_declaration=False
+                target_path, target_line, target_char, include_declaration=False
             )
         except Exception:
             logger.debug("Error getting references for impact analysis", exc_info=True)
@@ -509,15 +592,21 @@ class LSPReporter(ContextAwareDiagnosticReporter):
                 SymbolLocation(file_path=ref_path, range=lsp_range_to_range(ref.range))
             )
 
-        return SignatureChangeImpact(
-            symbol_name=symbol_name,
-            symbol_location=SymbolLocation(
+        symbol_location = (
+            definition
+            if definition is not None
+            else SymbolLocation(
                 file_path=str(file_path),
                 range=Range(
                     start=Position(line=line, character=character),
                     end=Position(line=line, character=character),
                 ),
-            ),
+            )
+        )
+
+        return SignatureChangeImpact(
+            symbol_name=symbol_name,
+            symbol_location=symbol_location,
             usages=usages,
             total_usages=len(usages),
             affected_files=sorted(affected_files),

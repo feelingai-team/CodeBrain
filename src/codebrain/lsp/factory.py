@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from codebrain.core.interfaces import ContextAwareDiagnosticReporter
 from codebrain.core.models import SubProject
+from codebrain.fallback.chain import FallbackChain
+from codebrain.fallback.hints import get_hints
 from codebrain.lsp.servers.multi import MultiLanguageReporter
 from codebrain.lsp.servers.pyright import PyrightReporter
 
@@ -15,6 +18,16 @@ logger = logging.getLogger(__name__)
 _LANGUAGE_FACTORIES: dict[str, type] = {
     "python": PyrightReporter,
 }
+
+# Registry mapping language names to their CLI fallback classes (if any)
+_FALLBACK_FACTORIES: dict[str, type] = {}
+
+# Python always has a CLI fallback
+try:
+    from codebrain.fallback.pyright_cli import PyrightCLIReporter
+    _FALLBACK_FACTORIES["python"] = PyrightCLIReporter
+except ImportError:
+    pass
 
 # Lazy-import optional reporters
 try:
@@ -43,7 +56,7 @@ def build_multi_reporter(
 ) -> MultiLanguageReporter:
     """Build a MultiLanguageReporter for the requested languages at the given root."""
     langs = languages or list(_LANGUAGE_FACTORIES.keys())
-    reporters = []
+    reporters: list[ContextAwareDiagnosticReporter] = []
     for lang in langs:
         factory = _LANGUAGE_FACTORIES.get(lang)
         if factory is None:
@@ -63,5 +76,16 @@ def build_multi_reporter(
             elif lang == "cpp" and tc.cpp_env:
                 kwargs["cpp_env"] = tc.cpp_env
 
-        reporters.append(factory(workspace_root, **kwargs))
+        primary = factory(workspace_root, **kwargs)
+
+        # Wrap in FallbackChain if a CLI fallback exists for this language
+        fallback_factory = _FALLBACK_FACTORIES.get(lang)
+        if fallback_factory is not None:
+            fallback = fallback_factory(workspace_root)
+            hints = get_hints(lang, "server_missing")
+            reporter = FallbackChain(primary=primary, fallback=fallback, hints=hints)
+        else:
+            reporter = primary
+
+        reporters.append(reporter)
     return MultiLanguageReporter(workspace_root, reporters)

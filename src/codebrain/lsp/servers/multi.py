@@ -7,7 +7,6 @@ from pathlib import Path
 
 from codebrain.core.interfaces import ContextAwareDiagnosticReporter
 from codebrain.core.models import Diagnostic, DiagnosticContext
-from codebrain.lsp.servers.base import LSPReporter
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +17,15 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
     def __init__(
         self,
         workspace_root: Path,
-        reporters: list[LSPReporter] | None = None,
+        reporters: list[ContextAwareDiagnosticReporter] | None = None,
     ) -> None:
         self._workspace_root = workspace_root
-        self._reporters: list[LSPReporter] = []
-        self._extension_map: dict[str, LSPReporter] = {}
+        self._reporters: list[ContextAwareDiagnosticReporter] = []
+        self._extension_map: dict[str, ContextAwareDiagnosticReporter] = {}
         for reporter in reporters or []:
             self.add_reporter(reporter)
 
-    def add_reporter(self, reporter: LSPReporter) -> None:
+    def add_reporter(self, reporter: ContextAwareDiagnosticReporter) -> None:
         for ext in reporter.supported_extensions:
             if ext in self._extension_map:
                 raise ValueError(
@@ -35,7 +34,9 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
             self._extension_map[ext] = reporter
         self._reporters.append(reporter)
 
-    def get_reporter_for_file(self, file_path: Path) -> LSPReporter | None:
+    def get_reporter_for_file(
+        self, file_path: Path,
+    ) -> ContextAwareDiagnosticReporter | None:
         return self._extension_map.get(file_path.suffix)
 
     @property
@@ -48,31 +49,36 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
 
     @property
     def is_running(self) -> bool:
-        return any(r.is_running for r in self._reporters)
+        return any(getattr(r, "is_running", False) for r in self._reporters)
 
     async def start(self) -> None:
         for reporter in self._reporters:
-            if not reporter.is_running:
-                try:
-                    await reporter.start()
-                except Exception:
-                    logger.exception("Failed to start reporter: %s", reporter.name)
+            if getattr(reporter, "is_running", False):
+                continue
+            try:
+                if hasattr(reporter, "start"):
+                    await reporter.start()  # type: ignore[attr-defined]
+            except Exception:
+                logger.exception("Failed to start reporter: %s", reporter.name)
 
     async def stop(self) -> None:
         for reporter in self._reporters:
-            if reporter.is_running:
-                try:
-                    await reporter.stop()
-                except Exception:
-                    logger.exception("Failed to stop reporter: %s", reporter.name)
+            if not getattr(reporter, "is_running", True):
+                continue
+            try:
+                if hasattr(reporter, "stop"):
+                    await reporter.stop()  # type: ignore[attr-defined]
+            except Exception:
+                logger.exception("Failed to stop reporter: %s", reporter.name)
 
     async def get_diagnostics(self, file_path: Path) -> list[Diagnostic]:
         reporter = self.get_reporter_for_file(file_path)
         if reporter is None:
             return []
-        if not reporter.is_running:
+        if not getattr(reporter, "is_running", False):
             logger.warning("Starting reporter on demand: %s", reporter.name)
-            await reporter.start()
+            if hasattr(reporter, "start"):
+                await reporter.start()  # type: ignore[attr-defined]
         try:
             return await reporter.get_diagnostics(file_path)
         except TimeoutError:
@@ -85,7 +91,7 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
     async def get_all_diagnostics(self) -> dict[Path, list[Diagnostic]]:
         combined: dict[Path, list[Diagnostic]] = {}
         for reporter in self._reporters:
-            if not reporter.is_running:
+            if not getattr(reporter, "is_running", False):
                 continue
             try:
                 result = await reporter.get_all_diagnostics()
@@ -100,8 +106,9 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
         if reporter is None:
             msg = f"No reporter for {file_path.suffix}"
             raise ValueError(msg)
-        if not reporter.is_running:
-            await reporter.start()
+        if not getattr(reporter, "is_running", False):
+            if hasattr(reporter, "start"):
+                await reporter.start()  # type: ignore[attr-defined]
         try:
             return await reporter.get_context(diagnostic)
         except TimeoutError:
@@ -113,15 +120,15 @@ class MultiLanguageReporter(ContextAwareDiagnosticReporter):
 
     async def open_file(self, file_path: Path) -> None:
         reporter = self.get_reporter_for_file(file_path)
-        if reporter is not None:
-            await reporter.open_file(file_path)
+        if reporter is not None and hasattr(reporter, "open_file"):
+            await reporter.open_file(file_path)  # type: ignore[attr-defined]
 
     async def update_file(self, file_path: Path, content: str) -> None:
         reporter = self.get_reporter_for_file(file_path)
-        if reporter is not None:
-            await reporter.update_file(file_path, content)
+        if reporter is not None and hasattr(reporter, "update_file"):
+            await reporter.update_file(file_path, content)  # type: ignore[attr-defined]
 
     async def close_file(self, file_path: Path) -> None:
         reporter = self.get_reporter_for_file(file_path)
-        if reporter is not None:
-            await reporter.close_file(file_path)
+        if reporter is not None and hasattr(reporter, "close_file"):
+            await reporter.close_file(file_path)  # type: ignore[attr-defined]

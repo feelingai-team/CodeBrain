@@ -28,8 +28,13 @@ class TestBuildMultiReporterWithSubProject:
             ),
         )
         reporter = build_multi_reporter(tmp_path, ["python"], sub_project=sp)
-        pyright = reporter.get_reporter_for_file(Path("test.py"))
-        assert pyright is not None
-        assert hasattr(pyright, "_python_env")
-        assert pyright._python_env is not None
-        assert pyright._python_env.venv_path == tmp_path / ".venv"
+        chain = reporter.get_reporter_for_file(Path("test.py"))
+        assert chain is not None
+        # Factory wraps in FallbackChain; unwrap to check the primary reporter
+        from codebrain.fallback.chain import FallbackChain
+
+        assert isinstance(chain, FallbackChain)
+        primary = chain.primary
+        assert hasattr(primary, "_python_env")
+        assert primary._python_env is not None
+        assert primary._python_env.venv_path == tmp_path / ".venv"
