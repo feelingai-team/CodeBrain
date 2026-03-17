@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from codebrain.core.models import WorkspaceInfo
+from codebrain.core.models import SubProject, WorkspaceInfo
 from codebrain.core.registry import SubProjectRegistry
 from codebrain.lsp.factory import build_multi_reporter
 from codebrain.lsp.servers.multi import MultiLanguageReporter
@@ -92,8 +92,13 @@ class WorkspaceManager:
         root: Path,
         name: str | None = None,
         languages: list[str] | None = None,
+        sub_project: SubProject | None = None,
     ) -> Workspace:
-        """Manually add a workspace for the given root."""
+        """Manually add a workspace for the given root.
+
+        If sub_project is provided, its toolchain config is passed to the
+        reporter factory so LSP servers get the correct venv/tsconfig/go.mod.
+        """
         root = root.resolve()
         if root in self._workspaces:
             return self._workspaces[root]
@@ -104,9 +109,9 @@ class WorkspaceManager:
             name=name or root.name,
             languages=languages or self._default_languages,
         )
-        reporter = build_multi_reporter(root, info.languages)
+        reporter = build_multi_reporter(root, info.languages, sub_project=sub_project)
         index = SymbolIndex(root)
-        
+
         ws = Workspace(info=info, reporter=reporter, index=index)
         self._workspaces[root] = ws
         return ws
@@ -114,19 +119,41 @@ class WorkspaceManager:
     async def get_workspace_for_file(
         self, file_path: Path, auto_discover: bool = True
     ) -> Workspace | None:
-        """Resolve which workspace a file belongs to (registry-first, then longest prefix match)."""
+        """Resolve which workspace a file belongs to.
+
+        Priority:
+        1. Exact sub-project workspace (if already created for this sub-project root)
+        2. Create a new workspace for the sub-project (lazy, with correct toolchain)
+        3. Existing workspace via longest-prefix match
+        4. Auto-discover workspace root
+        """
         file_path = file_path.resolve()
 
-        # Check registry for sub-project awareness
+        # 1. Check registry for sub-project awareness
         sub_project = self.registry.resolve(file_path)
         if sub_project:
-            for root, ws in self._workspaces.items():
-                if sub_project.root.is_relative_to(root):
-                    if not ws._is_running:
-                        await ws.start()
-                    return ws
+            # Do we already have a workspace for this exact sub-project root?
+            if sub_project.root in self._workspaces:
+                ws = self._workspaces[sub_project.root]
+                if not ws._is_running:
+                    await ws.start()
+                return ws
 
-        # Fall back to existing longest-prefix match
+            # Create a new workspace for this sub-project with its toolchain
+            sp_langs = [lang.value for lang in sub_project.languages]
+            ws = self.add_workspace(
+                sub_project.root,
+                languages=sp_langs,
+                sub_project=sub_project,
+            )
+            await ws.start()
+            logger.info(
+                "Created sub-project workspace: %s [%s]",
+                sub_project.root, ", ".join(sp_langs),
+            )
+            return ws
+
+        # 2. Fall back to existing longest-prefix match
         best_root: Path | None = None
         for root in self._workspaces:
             if file_path.is_relative_to(root):
@@ -139,13 +166,23 @@ class WorkspaceManager:
                 await ws.start()
             return ws
 
-        # Try auto-discovery
+        # 3. Try auto-discovery
         if auto_discover:
             discovered_root = discover_project_root(file_path)
             if discovered_root:
-                ws = self.add_workspace(discovered_root)
-                # Scan for sub-projects on auto-discovery
+                # Scan for sub-projects first, then check if file is in one
                 await self.registry.scan(discovered_root)
+                sub_project = self.registry.resolve(file_path)
+                if sub_project and sub_project.root != discovered_root:
+                    # File belongs to a sub-project — create workspace at sub-project root
+                    sp_langs = [lang.value for lang in sub_project.languages]
+                    ws = self.add_workspace(
+                        sub_project.root,
+                        languages=sp_langs,
+                        sub_project=sub_project,
+                    )
+                else:
+                    ws = self.add_workspace(discovered_root)
                 await ws.start()
                 return ws
 
