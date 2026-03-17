@@ -141,3 +141,23 @@ class TestFallbackChainContext:
         result = await chain.get_context(diag)
         assert result.diagnostic == diag
         assert result.definition is None
+
+
+class TestFallbackChainIsRunning:
+    @pytest.mark.asyncio
+    async def test_active_is_running(self, primary: AsyncMock, fallback: AsyncMock) -> None:
+        chain = FallbackChain(primary=primary, fallback=fallback)
+        chain.status = "active"
+        assert chain.is_running is True
+
+    @pytest.mark.asyncio
+    async def test_degraded_is_running(self, primary: AsyncMock, fallback: AsyncMock) -> None:
+        chain = FallbackChain(primary=primary, fallback=fallback)
+        chain.status = "degraded"
+        assert chain.is_running is True
+
+    @pytest.mark.asyncio
+    async def test_unavailable_not_running(self, primary: AsyncMock) -> None:
+        chain = FallbackChain(primary=primary, fallback=None)
+        chain.status = "unavailable"
+        assert chain.is_running is False
