@@ -36,6 +36,13 @@ try:
 except ImportError:
     pass
 
+# TypeScript always has a CLI fallback
+try:
+    from codebrain.fallback.tsc_cli import TscCLIReporter
+    _FALLBACK_FACTORIES["typescript"] = TscCLIReporter
+except ImportError:
+    pass
+
 # Lazy-import optional reporters
 try:
     from codebrain.lsp.servers.clangd import ClangdReporter
