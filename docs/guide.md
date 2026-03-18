@@ -200,7 +200,7 @@ search(query="...", pattern_mode=True)     # tree-sitter S-expression
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| **`debug_trace`** | Parse and enrich stack traces. Supports Python, JS/TS, C/C++ (GDB), Go, Rust. Adds hover info, definitions, and reference counts per frame. Identifies likely root cause (deepest in-workspace frame). | `stack_trace` |
+| **`debug_trace`** | Parse and enrich stack traces. Supports Python, JS/TS, C/C++ (GDB), Go. Adds hover info, definitions, and reference counts per frame. Identifies likely root cause (deepest in-workspace frame). | `stack_trace` |
 
 ##### Workspace Management
 
