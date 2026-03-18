@@ -39,7 +39,7 @@ distribute(
 
 ## Install as MCP Plugin
 
-CodeBrain exposes 9 tools (validate, outline, search, explore_symbol, check_impact, debug_trace, rename_symbol, add_workspace, list_workspaces) via the [Model Context Protocol](https://modelcontextprotocol.io/). Any MCP-compatible agent can use them.
+CodeBrain exposes 11 tools (validate, outline, search, explore_symbol, check_impact, debug_trace, rename_symbol, add_workspace, list_workspaces, check_health, list_subprojects) via the [Model Context Protocol](https://modelcontextprotocol.io/). Any MCP-compatible agent can use them.
 
 ### Step 1: Install CodeBrain
 
@@ -86,7 +86,7 @@ claude mcp add --transport stdio codebrain -- codebrain-mcp
 
 Claude Code starts the MCP server in your project's working directory, so CodeBrain automatically targets the right codebase — no `--workspace` flag needed.
 
-**Verify** — start a new Claude Code session and run `/mcp`. You should see `codebrain` listed with 9 tools.
+**Verify** — start a new Claude Code session and run `/mcp`. You should see `codebrain` listed with 11 tools.
 
 #### OpenCode
 
@@ -124,7 +124,7 @@ The server communicates over stdio using the MCP JSON-RPC protocol. Point any MC
 | `--workspace <path>` | Project root (default: current directory) |
 | `--languages <lang ...>` | Limit to specific language servers (e.g. `python typescript cpp`) |
 
-See [docs/installation.md](docs/installation.md) for the full reference, including CLAUDE.md integration and available tools.
+See [docs/guide.md](docs/guide.md) for the full reference, including SDK usage, CLAUDE.md integration, and all available tools.
 
 ## Open Source Roadmap
 

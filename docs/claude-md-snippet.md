@@ -111,6 +111,10 @@ Then run tests.
 | `validate` | Type-check via LSP | `file_path` (single) or `directory` + `extensions` (bulk) |
 | `rename_symbol` | Safe cross-workspace rename | `file_path` + `line` + `character` + `new_name` |
 | `debug_trace` | Enrich stack trace with types | `stack_trace` (full text) |
+| `add_workspace` | Add a new workspace root | `root_path` |
+| `list_workspaces` | List active workspaces | — |
+| `check_health` | Language server health per sub-project | `workspace_path` (optional) |
+| `list_subprojects` | Detected sub-projects and their languages | `workspace_path` (optional) |
 
 **Note:** Sub-agents (Explore, Plan, feature-dev:code-explorer) cannot access these tools. Always run them yourself in the main conversation.
 

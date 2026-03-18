@@ -3,7 +3,7 @@
   "mcp": {
     "codebrain": {
       "type": "local",
-      "command": ["uvx", "codebrain[mcp,search]"],
+      "command": ["codebrain-mcp"],
       "enabled": true
     }
   }

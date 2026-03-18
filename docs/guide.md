@@ -2,65 +2,92 @@
 
 CodeBrain is an open-source Python library and MCP server that gives coding agents LSP-based code validation and structural syntax search. It wraps Language Server Protocol servers and tree-sitter grammars into a clean, async Python API — usable as a direct SDK import or as an MCP plugin for any compatible agent.
 
+---
+
+## Table of Contents
+
+- [How CodeBrain Works](#how-codebrain-works)
+  - [Architecture](#architecture)
+  - [Language Server Management](#language-server-management)
+  - [Search Engine](#search-engine)
+  - [Incremental Indexing](#incremental-indexing)
+- [How to Use CodeBrain](#how-to-use-codebrain)
+  - [As an MCP Plugin](#as-an-mcp-plugin)
+  - [As a Python SDK](#as-a-python-sdk)
+- [Reference](#reference)
+  - [MCP Tools Quick Reference](#mcp-tools-quick-reference)
+  - [SDK Skills](#sdk-skills)
+  - [Data Models](#data-models)
+  - [Configuration](#configuration)
+  - [Prerequisites](#prerequisites)
+
+---
+
 ## How CodeBrain Works
 
 ### Architecture
 
 ```
-Consumers (Claude Code, Cursor, OpenHands, custom agents)
+Consumers (Claude Code, Cursor, OpenCode, custom agents)
     │ MCP protocol          │ Python import
     ▼                       ▼
-┌─ MCP Server (FastMCP) ──────────────────────────┐
-├─ Skills (composed workflows) ────────────────────┤
-├─ Tools (atomic operations) ──────────────────────┤
-├─ LSP Engine ─────────┬─ Search (tree-sitter) ────┤
-├─ Core (models, config, workspace management) ────┤
-└──────────────────────────────────────────────────┘
+┌─ Layer 5: MCP Server (FastMCP) ─────────────────┐
+├─ Layer 4: Skills (composed workflows) ──────────┤
+├─ Layer 3: Tools (atomic operations) ────────────┤
+├─ Layer 2a: LSP Engine ─┬─ Layer 2b: Search ────┤
+├─ Layer 1: Core (models, config, workspace) ─────┤
+└─────────────────────────────────────────────────┘
 ```
 
 CodeBrain operates in three layers:
 
-**Tools** are single-purpose async functions. Each does one thing: validate a file, find references, search symbols. They talk directly to language servers or tree-sitter.
-
-**Skills** compose multiple tools into higher-level workflows. For example, `contextual_diagnostics` validates a file, then for each error automatically fetches the definition, references, hover info, and suggested fixes — giving an agent everything it needs to fix the problem in one call.
-
-**MCP Server** exposes 9 intent-oriented tools over the Model Context Protocol, each consolidating multiple atomic operations into what an LLM actually needs.
+| Layer | What it does | Example |
+|-------|-------------|---------|
+| **Tools** | Single-purpose async functions. Each does one thing. | `validate_file`, `find_references`, `search_symbol` |
+| **Skills** | Compose multiple tools into higher-level workflows. | `contextual_diagnostics` = validate + definition + hover + code actions |
+| **MCP Server** | Exposes 11 intent-oriented tools over MCP, each consolidating multiple atomic operations into what an LLM actually needs. | `validate`, `explore_symbol`, `search` |
 
 ### Language Server Management
 
-CodeBrain manages LSP servers as background processes. When you validate a Python file, CodeBrain:
+CodeBrain manages LSP servers as background processes. When you validate a file, CodeBrain:
 
-1. Detects the language from the file extension
-2. Finds or starts the appropriate language server (Pyright for Python)
-3. Auto-discovers the project root (via `pyproject.toml`, `.git`, etc.)
-4. Detects virtual environments and configures the Python path
-5. Sends the file to the server and collects diagnostics
-6. Translates LSP responses into Pydantic models
+```
+File (e.g. main.py)
+  │
+  ├─ 1. Detect language from extension
+  ├─ 2. Find or start the appropriate language server
+  ├─ 3. Auto-discover project root (pyproject.toml, .git, go.mod, etc.)
+  ├─ 4. Detect virtualenvs / configure language paths
+  ├─ 5. Send file to server, collect diagnostics
+  └─ 6. Translate LSP responses → Pydantic models
+```
 
-Servers start lazily on first use and stay alive for subsequent requests. The `MultiLanguageReporter` routes files to the correct server based on extension.
+Servers start **lazily** on first use and stay alive for subsequent requests. The `MultiLanguageReporter` routes files to the correct server by extension.
 
-**Supported languages:**
+#### Supported Languages
 
-| Language | Server | Extensions |
-|----------|--------|------------|
-| Python | Pyright | `.py`, `.pyi` |
-| Go | gopls | `.go` |
-| C/C++ | clangd | `.c`, `.cpp`, `.h`, `.hpp`, etc. |
-| TypeScript | typescript-language-server | `.ts`, `.tsx` |
-| JavaScript | typescript-language-server | `.js`, `.jsx` |
+| Language | LSP Server | Extensions | Notes |
+|----------|-----------|------------|-------|
+| Python | Pyright | `.py`, `.pyi` | Auto-detects virtualenvs |
+| Go | gopls | `.go` | |
+| C/C++ | clangd | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx` | Uses `compile_commands.json` |
+| TypeScript | typescript-language-server | `.ts`, `.tsx` | Shared server with JS |
+| JavaScript | typescript-language-server | `.js`, `.jsx` | Shared server with TS |
 
 ### Search Engine
 
 CodeBrain uses tree-sitter for code-aware search, independent of language servers:
 
-- **Symbol search**: Find functions, classes, types by name. Supports exact match, substring, glob patterns (`Motion*`), multi-keyword AND (`motion handler`), and pipe OR (`StreamParser|FrameParser`).
-- **Identifier search**: Find all usages of a name — method calls, variable references, field access.
-- **Structural search**: Tree-sitter S-expression queries for pattern matching across code structure.
-- **Repomap**: PageRank-ranked symbol graph showing the most important symbols in a codebase.
+| Mode | What it finds | Example query |
+|------|--------------|---------------|
+| **Symbol search** | Functions, classes, types by name | `"handleRequest"`, `"Motion*"` (glob), `"motion handler"` (AND), `"StreamParser\|FrameParser"` (OR) |
+| **Identifier search** | All usages — method calls, variable refs, field access | `"ctx"` finds every usage of `ctx` |
+| **Structural search** | Tree-sitter S-expression pattern matching | `(function_definition name: (identifier) @name)` |
+| **Repomap** | PageRank-ranked symbol graph of most important symbols | (no query — whole workspace) |
 
 ### Incremental Indexing
 
-CodeBrain maintains a symbol index that updates incrementally (~50-200ms per file change). With optional `watchfiles` integration, the index stays current as files change on disk.
+CodeBrain maintains a symbol index that updates incrementally (~50–200ms per file change). With optional `watchfiles` integration, the index stays current as files change on disk.
 
 ---
 
@@ -76,14 +103,31 @@ This is the primary usage mode. Any MCP-compatible agent (Claude Code, Cursor, O
 pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
 ```
 
-#### Register with Claude Code
+Verify the installation:
 
 ```bash
-# Global — available in every session
-claude mcp add --transport stdio codebrain -- codebrain-mcp
+codebrain-mcp --help
 ```
 
-Or project-scoped — add `.mcp.json` to your repo root:
+> **For contributors** — clone and install in editable mode instead:
+> ```bash
+> git clone https://github.com/feelingai-team/CodeBrain.git
+> cd CodeBrain
+> pip install -e ".[all]"
+> ```
+
+#### Register with Your Agent
+
+| Agent | Registration |
+|-------|-------------|
+| **Claude Code** (global) | `claude mcp add --transport stdio codebrain -- codebrain-mcp` (verify: `/mcp` should list codebrain with 11 tools) |
+| **Claude Code** (project) | Add `.mcp.json` to repo root (see below) |
+| **OpenCode** (CLI) | `opencode mcp add codebrain --type local --command "codebrain-mcp"` |
+| **OpenCode** (config) | Add to `opencode.json` (see below) |
+| **Other clients** | `codebrain-mcp --workspace /path/to/project` |
+
+<details>
+<summary><b>.mcp.json</b> (Claude Code project-scoped)</summary>
 
 ```json
 {
@@ -97,13 +141,10 @@ Or project-scoped — add `.mcp.json` to your repo root:
 }
 ```
 
-#### Register with OpenCode
+</details>
 
-```bash
-opencode mcp add codebrain --type local --command "codebrain-mcp"
-```
-
-Or add to `opencode.json`:
+<details>
+<summary><b>opencode.json</b></summary>
 
 ```json
 {
@@ -118,49 +159,57 @@ Or add to `opencode.json`:
 }
 ```
 
-#### Other MCP clients
-
-```bash
-codebrain-mcp --workspace /path/to/project
-```
+</details>
 
 #### Available MCP Tools
 
-Once connected, your agent gets these 9 tools:
+Once connected, your agent gets these **11 tools**:
 
-**`validate`** — Check code for errors.
-- Pass a `file_path` for rich contextual diagnostics (with definitions, hover, fixes).
-- Pass a `directory` for bulk scanning.
-- Filter by `min_severity`: `"error"`, `"warning"`, `"information"`, `"hint"`.
+##### Validation & Diagnostics
 
-**`explore_symbol`** — Deep-dive into a symbol.
-- By position: `(file_path, line, character)` → definition + hover + references + call hierarchy.
-- By name: `(file_path, symbol_query)` → fuzzy match from file outline, then resolve.
-- Toggle `include_references`, `include_callers`, `include_callees`.
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **`validate`** | Check code for errors. Pass `file_path` for rich per-error context (with definitions, hover, fixes), or `directory` for bulk scanning. | `file_path`, `directory`, `min_severity` (`"error"` / `"warning"` / `"information"` / `"hint"`) |
 
-**`outline`** — Get code structure.
-- With `file_path`: hierarchical document symbols for one file.
-- Without: workspace-wide repomap ranked by importance (PageRank).
+##### Code Navigation
 
-**`search`** — Find code by name or structure.
-- Default mode searches symbol definitions (functions, classes, types).
-- Set `mode: "identifiers"` for usages (calls, references).
-- Set `mode: "pattern"` for tree-sitter structural queries.
-- Supports `kind` filter (`function`, `class`, `type`), `language`, glob file paths.
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **`explore_symbol`** | Deep-dive into a symbol: definition, type info, references, call hierarchy. Use `(line, character)` for position-based lookup, or `symbol_query` for name matching. | `file_path`, `line`, `character`, `symbol_query`, `include_references`, `include_callers`, `include_callees` |
+| **`outline`** | With `file_path`: hierarchical document symbols. Without: workspace-wide repomap ranked by PageRank. | `file_path`, `max_chars` |
+| **`check_impact`** | What breaks if a symbol changes? Shows usages, affected files, broken diagnostics, and suggested fixes. | `file_path`, `line`, `character`, `check_signature` |
+| **`rename_symbol`** | Rename across the workspace. Returns an edit list with all affected files. | `file_path`, `line`, `character`, `new_name` |
 
-**`check_impact`** — What breaks if a symbol changes?
-- Shows all usages, affected files, and broken diagnostics.
-- Suggests code actions for fixing breakage.
+##### Search
 
-**`debug_trace`** — Parse and enrich stack traces.
-- Supports Python, JS/TS, C/C++ (GDB), Go, Rust.
-- Adds hover info, definitions, and reference counts per frame.
-- Identifies likely root cause (deepest in-workspace frame).
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **`search`** | Find code by name or structure. Default searches symbol definitions. Use `scope="identifiers"` for usages (calls, refs). Use `scope="all"` for both. Set `pattern_mode=True` for tree-sitter structural queries. | `query`, `scope`, `pattern_mode`, `kind`, `language`, `file_paths` |
 
-**`rename_symbol`** — Rename across the workspace.
-- Returns an edit list with all affected files.
+Query syntax:
 
-**`add_workspace`** / **`list_workspaces`** — Manage workspace roots.
+```
+search(query="HandleMotion")               # exact/substring match
+search(query="motion handler")             # multi-keyword AND
+search(query="StreamParser|FrameParser")   # pipe OR (best match wins)
+search(query="Motion*")                    # glob pattern
+search(query="...", pattern_mode=True)     # tree-sitter S-expression
+```
+
+##### Debugging
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **`debug_trace`** | Parse and enrich stack traces. Supports Python, JS/TS, C/C++ (GDB), Go, Rust. Adds hover info, definitions, and reference counts per frame. Identifies likely root cause (deepest in-workspace frame). | `stack_trace` |
+
+##### Workspace Management
+
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| **`add_workspace`** | Add a new workspace root. | `root_path` |
+| **`list_workspaces`** | List all active workspaces. | — |
+| **`check_health`** | Check language server health for all sub-projects. Returns status (active/degraded/unavailable) per language with remediation hints. | `workspace_path` |
+| **`list_subprojects`** | List all detected sub-projects with their languages and markers. | `workspace_path` |
 
 #### CLI Flags
 
@@ -168,10 +217,10 @@ Once connected, your agent gets these 9 tools:
 codebrain-mcp --workspace /path/to/project --languages python typescript
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--workspace <path>` | Project root (default: current directory) |
-| `--languages <lang ...>` | Limit to specific servers (e.g., `python typescript cpp go`) |
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--workspace <path>` | Project root | Current directory |
+| `--languages <lang ...>` | Limit to specific servers | All supported |
 
 #### Project Scaffolding
 
@@ -180,6 +229,10 @@ codebrain init [directory] [--dry-run]
 ```
 
 Auto-generates `.mcp.json`, `CLAUDE.md`, and hooks for a project.
+
+#### CLAUDE.md SOPs (Recommended)
+
+Copy the SOPs from [claude-md-snippet.md](claude-md-snippet.md) into your project's `CLAUDE.md`. This teaches Claude Code (and other agents that read CLAUDE.md) to use CodeBrain tools in a structured workflow — validate after every edit, check impact before modifying signatures, etc.
 
 ---
 
@@ -191,6 +244,7 @@ Import CodeBrain directly for custom tooling, scripts, or agent frameworks.
 
 ```bash
 pip install "codebrain[all] @ git+https://github.com/feelingai-team/CodeBrain.git"
+
 # or specific extras:
 pip install "codebrain[search] @ git+https://github.com/feelingai-team/CodeBrain.git"  # tree-sitter only
 pip install "codebrain[mcp] @ git+https://github.com/feelingai-team/CodeBrain.git"     # MCP server only
@@ -273,34 +327,70 @@ for usage in impact.usages:
     print(f"  Used at: {usage.file_path}:{usage.range.start.line}")
 ```
 
-#### Stack trace parsing (skill)
+#### Stack trace analysis (skill)
 
 ```python
-from codebrain.skills.stack_trace import parse_and_enrich_trace
+from codebrain.skills.stack_trace import analyze_stack_trace
 
-result = await parse_and_enrich_trace(
-    workspace,
-    trace_text="""Traceback (most recent call last):
+result = await analyze_stack_trace(
+    reporter=workspace.reporter,
+    stack_trace="""Traceback (most recent call last):
   File "main.py", line 42, in handle
     process(data)
 TypeError: process() missing 1 required argument""",
+    workspace_root=workspace.info.root_path,
 )
-print(f"Root cause: {result.root_cause_frame}")
-for frame in result.frames:
-    print(f"  {frame.file}:{frame.line} {frame.function}")
+print(f"Root cause frame: {result.frames[result.root_cause_index].frame.file_path}")
+for ef in result.frames:
+    print(f"  {ef.frame.file_path}:{ef.frame.line} {ef.frame.function_name}")
 ```
+
+---
+
+## Reference
+
+### MCP Tools Quick Reference
+
+| # | Tool | Purpose | Category |
+|---|------|---------|----------|
+| 1 | `validate` | Check code for errors (single file or bulk) | Diagnostics |
+| 2 | `explore_symbol` | Definition + hover + references + call hierarchy | Navigation |
+| 3 | `outline` | File symbols or workspace-wide repomap | Navigation |
+| 4 | `check_impact` | What breaks if a symbol changes | Navigation |
+| 5 | `rename_symbol` | Rename across workspace | Navigation |
+| 6 | `search` | Find symbols, identifiers, or structural patterns | Search |
+| 7 | `debug_trace` | Parse and enrich stack traces | Debugging |
+| 8 | `add_workspace` | Add a workspace root | Admin |
+| 9 | `list_workspaces` | List active workspaces | Admin |
+| 10 | `check_health` | Language server health per sub-project | Admin |
+| 11 | `list_subprojects` | Detected sub-projects and their languages | Admin |
+
+### SDK Skills
+
+Skills compose multiple tools into higher-level workflows:
+
+| Skill | Module | Composes | Description |
+|-------|--------|----------|-------------|
+| `contextual_diagnostics` | `codebrain.skills.contextual_diagnostics` | validate + definition + references + hover + code_actions | Validate and gather full fix context per diagnostic |
+| `impact_analysis` | `codebrain.skills.impact_analysis` | find_references + validate | For a changed symbol, find all usages and check for breakage |
+| `signature_check` | `codebrain.skills.signature_check` | impact_analysis + hover | Detect signature changes and downstream impact |
+| `look_then_jump` | `codebrain.skills.look_then_jump` | outline + goto_definition + hover | Outline a file, find a symbol by name, jump to its definition |
+| `analyze_stack_trace` | `codebrain.skills.stack_trace` | parse + hover + definition + references | Parse stack traces and enrich frames with LSP context |
 
 ### Data Models
 
 All data flows through typed Pydantic models defined in `codebrain.core.models`:
 
-- `Diagnostic` — error/warning with severity, code, source, range
-- `DiagnosticContext` — diagnostic + definition + references + hover + code actions
-- `DocumentSymbol` — hierarchical symbol with name, kind, range, children
-- `SymbolLocation` — file path + range + optional name
-- `SignatureChangeImpact` — usages and affected files for a changed symbol
-- `RenameResult` — edit list with affected file count
-- `CallHierarchyItem` / `CallHierarchyCall` — call graph nodes and edges
+| Model | Description |
+|-------|-------------|
+| `Diagnostic` | Error/warning with severity, code, source, range |
+| `DiagnosticContext` | Diagnostic + definition + references + hover + code actions |
+| `DocumentSymbol` | Hierarchical symbol with name, kind, range, children |
+| `SymbolLocation` | File path + range + optional name |
+| `SignatureChangeImpact` | Usages and affected files for a changed symbol |
+| `RenameResult` | Edit list with affected file count |
+| `CallHierarchyItem` | Call graph node (symbol with kind, URI, range) |
+| `CallHierarchyCall` | Call graph edge (from/to item + call site ranges) |
 
 ### Configuration
 
@@ -308,6 +398,7 @@ All data flows through typed Pydantic models defined in `codebrain.core.models`:
 from codebrain.core.config import ValidationConfig
 
 config = ValidationConfig(
+    workspace_root="/path/to/project",
     python={"enabled": True, "error_action": "BLOCK", "warning_action": "WARN"},
     typescript={"enabled": True},
     cpp={"enabled": False},
@@ -317,27 +408,25 @@ config = ValidationConfig(
 )
 ```
 
-Per-language settings:
+#### Per-Language Settings
 
-| Setting | Description |
-|---------|-------------|
-| `enabled` | Toggle language server on/off |
-| `lsp_command` | Custom server command override |
-| `use_fallback` | Use Pyright CLI fallback (Python only) |
-| `error_action` | `BLOCK` / `WARN` / `IGNORE` |
-| `warning_action` | `BLOCK` / `WARN` / `IGNORE` |
-| `pyrightconfig_path` | Custom Pyright config location |
-| `tsconfig_path` | Custom tsconfig location |
-| `compile_commands_path` | Custom compile_commands.json location |
+| Setting | Type | Description |
+|---------|------|-------------|
+| `enabled` | `bool` | Toggle language server on/off |
+| `lsp_command` | `list[str]` | Custom server command override |
+| `use_fallback` | `bool` | Use Pyright CLI fallback (Python only) |
+| `error_action` | `str` | `"block"` / `"warn"` / `"ignore"` |
+| `warning_action` | `str` | `"block"` / `"warn"` / `"ignore"` |
+| `pyrightconfig_path` | `str` | Custom Pyright config location (Python) |
+| `tsconfig_path` | `str` | Custom tsconfig location (TS/JS) |
+| `compile_commands_path` | `str` | Custom compile_commands.json location (C/C++) |
 
----
-
-## Prerequisites
+### Prerequisites
 
 CodeBrain requires the language servers to be installed on your system:
 
-| Language | Install |
-|----------|---------|
+| Language | Install Command |
+|----------|----------------|
 | Python | `npm install -g pyright` or `uv tool install pyright` |
 | Go | `go install golang.org/x/tools/gopls@latest` |
 | C/C++ | Install `clangd` via your system package manager |
