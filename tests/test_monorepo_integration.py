@@ -252,8 +252,8 @@ class TestFallbackChainWiring:
         assert isinstance(py_reporter, FallbackChain)
         assert py_reporter.primary is not None
 
-    async def test_go_reporter_is_not_fallback_chain(self, monorepo: Path) -> None:
-        """Go has no CLI fallback, so reporter should not be a FallbackChain."""
+    async def test_go_reporter_has_fallback_chain(self, monorepo: Path) -> None:
+        """Go has a CLI fallback (go vet), so reporter should be a FallbackChain."""
         manager = WorkspaceManager()
         await manager.registry.scan(monorepo)
 
@@ -262,10 +262,8 @@ class TestFallbackChainWiring:
 
         assert ws is not None
         go_reporter = ws.reporter.get_reporter_for_file(Path("main.go"))
-        # If gopls is not installed, reporter may be None — either is acceptable.
-        # If it exists, it must NOT be a FallbackChain (no CLI fallback for Go).
         if go_reporter is not None:
-            assert not isinstance(go_reporter, FallbackChain)
+            assert isinstance(go_reporter, FallbackChain)
 
 
 class TestAutoDiscovery:
