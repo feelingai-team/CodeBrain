@@ -49,7 +49,7 @@ class TscCLIReporter(DiagnosticReporter):
 
     async def get_diagnostics(self, file_path: Path) -> list[Diagnostic]:
         # tsc runs on the whole project; filter results to the requested file
-        results = await self._run_tsc()
+        results = await self._run_tsc(files=[file_path])
         resolved = file_path.resolve()
         for key in (resolved, file_path, Path(str(file_path))):
             if key in results:
@@ -63,11 +63,34 @@ class TscCLIReporter(DiagnosticReporter):
     async def get_all_diagnostics(self) -> dict[Path, list[Diagnostic]]:
         return await self._run_tsc()
 
-    async def _run_tsc(self) -> dict[Path, list[Diagnostic]]:
+    def _resolve_tsconfig(self) -> Path | None:
+        """Return the tsconfig path to use, auto-discovering if not explicitly set."""
+        if self._tsconfig_path is not None:
+            return self._tsconfig_path
+        candidate = self._workspace_root / "tsconfig.json"
+        if candidate.is_file():
+            return candidate
+        return None
+
+    async def _run_tsc(
+        self, files: list[Path] | None = None
+    ) -> dict[Path, list[Diagnostic]]:
         """Run tsc --noEmit CLI and return parsed diagnostics."""
         cmd = [self._tsc_path, "--noEmit", "--pretty", "false"]
-        if self._tsconfig_path is not None:
-            cmd.extend(["-p", str(self._tsconfig_path)])
+
+        tsconfig = self._resolve_tsconfig()
+        if tsconfig is not None:
+            cmd.extend(["-p", str(tsconfig)])
+        elif files:
+            # No tsconfig found; pass files directly so tsc doesn't just print help
+            cmd.extend(str(f) for f in files)
+        else:
+            logger.warning(
+                "No tsconfig.json found in %s and no files specified; "
+                "tsc cannot run without a project or file list",
+                self._workspace_root,
+            )
+            return {}
 
         try:
             process = await asyncio.create_subprocess_exec(

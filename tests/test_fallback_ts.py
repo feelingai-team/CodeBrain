@@ -35,6 +35,14 @@ def workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def workspace_no_tsconfig(tmp_path: Path) -> Path:
+    """Create a TypeScript workspace WITHOUT tsconfig.json."""
+    (tmp_path / "error.ts").write_text(SAMPLE_WITH_ERROR)
+    (tmp_path / "clean.ts").write_text(SAMPLE_CLEAN)
+    return tmp_path
+
+
 class TestTscCLIReporterProperties:
     def test_name(self, tmp_path: Path) -> None:
         reporter = TscCLIReporter(tmp_path)
@@ -77,10 +85,47 @@ class TestTscCLIReporterProperties:
         assert reporter._tsconfig_path is None
 
 
+class TestResolveTsconfig:
+    def test_explicit_tsconfig_returned(self, tmp_path: Path) -> None:
+        config = tmp_path / "custom-tsconfig.json"
+        config.write_text("{}")
+        reporter = TscCLIReporter(tmp_path, tsconfig_path=config)
+        assert reporter._resolve_tsconfig() == config
+
+    def test_auto_discovers_tsconfig_in_workspace(self, tmp_path: Path) -> None:
+        tsconfig = tmp_path / "tsconfig.json"
+        tsconfig.write_text("{}")
+        reporter = TscCLIReporter(tmp_path)
+        assert reporter._resolve_tsconfig() == tsconfig
+
+    def test_returns_none_when_no_tsconfig(self, tmp_path: Path) -> None:
+        reporter = TscCLIReporter(tmp_path)
+        assert reporter._resolve_tsconfig() is None
+
+    def test_explicit_takes_precedence_over_auto(self, tmp_path: Path) -> None:
+        """Explicit tsconfig_path wins even when tsconfig.json exists in workspace."""
+        (tmp_path / "tsconfig.json").write_text("{}")
+        custom = tmp_path / "tsconfig.build.json"
+        custom.write_text("{}")
+        reporter = TscCLIReporter(tmp_path, tsconfig_path=custom)
+        assert reporter._resolve_tsconfig() == custom
+
+
+class TestRunTscNoTsconfig:
+    async def test_get_all_diagnostics_returns_empty_without_tsconfig(
+        self, tmp_path: Path
+    ) -> None:
+        """Without tsconfig and no files, _run_tsc returns {} instead of running bare tsc."""
+        reporter = TscCLIReporter(tmp_path)
+        results = await reporter.get_all_diagnostics()
+        assert results == {}
+
+
 class TestParseOutput:
     def test_parse_single_error(self, tmp_path: Path) -> None:
         reporter = TscCLIReporter(tmp_path)
-        output = f"{tmp_path}/app.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.\n"
+        msg = "Type 'string' is not assignable to type 'number'."
+        output = f"{tmp_path}/app.ts(10,5): error TS2322: {msg}\n"
         results = reporter._parse_output(output)
         assert len(results) == 1
         diags = list(results.values())[0]
@@ -97,7 +142,8 @@ class TestParseOutput:
 
     def test_parse_warning(self, tmp_path: Path) -> None:
         reporter = TscCLIReporter(tmp_path)
-        output = f"{tmp_path}/app.ts(3,1): warning TS6133: 'x' is declared but its value is never read.\n"
+        msg = "'x' is declared but its value is never read."
+        output = f"{tmp_path}/app.ts(3,1): warning TS6133: {msg}\n"
         results = reporter._parse_output(output)
         diags = list(results.values())[0]
         assert diags[0].severity == DiagnosticSeverity.WARNING
@@ -234,3 +280,17 @@ class TestTscCLIIntegration:
         reporter = TscCLIReporter(workspace)
         diags = await reporter.get_diagnostics(workspace / "nonexistent.ts")
         assert isinstance(diags, list)
+
+    async def test_file_with_errors_no_tsconfig(self, workspace_no_tsconfig: Path) -> None:
+        """Single-file diagnostics must work even without tsconfig.json."""
+        reporter = TscCLIReporter(workspace_no_tsconfig)
+        diags = await reporter.get_diagnostics(workspace_no_tsconfig / "error.ts")
+        assert len(diags) > 0
+        assert all(d.source == "tsc" for d in diags)
+
+    async def test_clean_file_no_tsconfig(self, workspace_no_tsconfig: Path) -> None:
+        """Clean file should have no errors even without tsconfig.json."""
+        reporter = TscCLIReporter(workspace_no_tsconfig)
+        diags = await reporter.get_diagnostics(workspace_no_tsconfig / "clean.ts")
+        errors = [d for d in diags if d.severity == DiagnosticSeverity.ERROR]
+        assert errors == []
