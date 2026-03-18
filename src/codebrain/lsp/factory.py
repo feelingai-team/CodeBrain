@@ -29,6 +29,13 @@ try:
 except ImportError:
     pass
 
+# Go always has a CLI fallback
+try:
+    from codebrain.fallback.govet_cli import GoVetCLIReporter
+    _FALLBACK_FACTORIES["go"] = GoVetCLIReporter
+except ImportError:
+    pass
+
 # Lazy-import optional reporters
 try:
     from codebrain.lsp.servers.clangd import ClangdReporter
