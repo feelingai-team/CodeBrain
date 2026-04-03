@@ -12,6 +12,22 @@ CodeBrain-1 achieves top-tier performance on [Terminal Bench 2.0](https://www.tb
 
 On a focused subset of 47 coding tasks, CodeBrain-1 scores **72.3%**, demonstrating consistent code generation and execution capabilities.
 
+Terminal Bench 2.0 is one of the harder agent benchmarks out there. It throws long, multi-step terminal tasks at you where things break in messy, realistic ways. Running it surfaced a bunch of recurring failure modes in our pipeline, and most of our gains came from just fixing those:
+
+Premature stop recovery was a big one. Sometimes the agent emits a message instead of a tool call, and the harness interprets that as "I'm done." It's not. We added a check for unverified stops that sends a continuation prompt to get it back on track.
+
+We also built structured tools for workspace analysis and constraint checking - inspecting file layout and resource state upfront instead of letting the agent poke around ad-hoc. Cuts down on a lot of wasted early turns.
+
+Dynamic reasoning effort: we run high reasoning during planning and verification, medium during implementation. Sounds obvious but it makes a real difference in token spend without hurting quality where it matters.
+
+Tool-call correction - just auto-fixing common formatting errors that would otherwise burn a turn for nothing.
+
+Tighter stuck-detection. We lowered the threshold for catching repeated identical commands. Agents love to get stuck in loops and run out the clock, so this matters more than you'd think.
+
+Context compression: LLM-summarized history with early messages pinned so the agent doesn't lose track of what it was actually asked to do in long sessions. Without this, tasks that go 50+ turns fall apart.
+
+And model-specific prompts - different models have different failure patterns, so we tailored behavioral guidance per model instead of using one prompt for everything.
+
 ## Tech Highlights
 
 ### Effective Context Searching
