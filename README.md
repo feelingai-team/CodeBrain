@@ -38,6 +38,53 @@ CodeBrain utilizes the code and symbol cross-referencing and indexing mechanisms
 
 CodeBrain further leverages the diagnostic capabilities of the Language Server Protocol (LSP) and, grounded in engineering expertise and task-specific characteristics, performs filtering, aggregation, and contextual information retrieval over LSP diagnostic outputs, thereby significantly reducing the overhead of the code–verify (or code–check) iteration loop.
 
+## Key design decisions
+
+- **Multi-language** — Python, Go, TypeScript/JavaScript, and C/C++ through one unified interface
+- **Graceful degradation** — `FallbackChain` auto-switches from LSP to CLI tools such as `pyright`, `go vet`, and `tsc` when language servers are unavailable
+- **Monorepo-aware** — auto-discovers sub-projects and resolves per-project toolchains such as `venv`, `go.mod`, `tsconfig`, and `CMake`
+- **Zero framework coupling** — pure Python, works with any MCP-compatible agent
+- **Intent-oriented tools** — consolidated low-level operations into what agents actually need, such as `validate`, `explore_symbol`, `search`, `check_impact`, `debug_trace`, and `rename_symbol`
+
+## What CodeBrain enables for agents
+
+### Quickly grasp project structure
+
+`outline` and `list_subprojects` let agents map a codebase's file hierarchy, symbol tree, and sub-project boundaries with far fewer exploratory file reads.
+
+### Reduce code search cost
+
+Structural search through `search` finds symbols by syntactic role rather than simple string matching, helping agents reach relevant code faster with less noise.
+
+### Tighten the edit-validate loop
+
+`validate` provides compiler-grade diagnostics immediately after edits, helping agents catch type errors, missing imports, and signature mismatches without running a full build every time.
+
+### Make refactors safer
+
+`check_impact`, `explore_symbol`, and `rename_symbol` surface callers, usages, and downstream breakage before agents commit to broader code changes.
+
+### Accelerate debugging
+
+`debug_trace` enriches stack traces with code intelligence and context, helping agents identify likely root causes faster.
+
+### Work reliably across environments
+
+Through graceful degradation, agents can still obtain useful diagnostics when full LSP support is unavailable, while `check_health` reports current capability and degraded states.
+
+### Handle monorepos natively
+
+CodeBrain detects sub-project boundaries and resolves the corresponding toolchains automatically, so agents do not need to know the repository layout in advance.
+
+## Current language support maturity
+
+| Language | Status |
+|----------|--------|
+| Python | Production-ready |
+| Go | LSP-complete + CLI fallback |
+| TypeScript / JavaScript | Functional + CLI fallback |
+| C / C++ | Basic LSP |
+
 ## Use Case: Runtime Code Generation for Gameplay
 
 ### An Example
