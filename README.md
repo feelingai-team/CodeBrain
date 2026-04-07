@@ -82,12 +82,28 @@ CodeBrain detects sub-project boundaries and resolves the corresponding toolchai
 
 ## Current language support maturity
 
-| Language | Status |
-|----------|--------|
-| Python | Production-ready |
-| Go | LSP-complete + CLI fallback |
-| TypeScript / JavaScript | Functional + CLI fallback |
-| C / C++ | Basic LSP |
+<table width="100%">
+  <tr>
+    <th align="left">Language</th>
+    <th align="left">Status</th>
+  </tr>
+  <tr>
+    <td>Python</td>
+    <td>Production-ready</td>
+  </tr>
+  <tr>
+    <td>Go</td>
+    <td>LSP-complete + CLI fallback</td>
+  </tr>
+  <tr>
+    <td>TypeScript / JavaScript</td>
+    <td>Functional + CLI fallback</td>
+  </tr>
+  <tr>
+    <td>C / C++</td>
+    <td>Basic LSP</td>
+  </tr>
+</table>
 
 ## Use Case: Runtime Code Generation for Gameplay
 
@@ -97,11 +113,15 @@ In search–engage–withdraw–style games, if a player repeatedly follows a ha
 
 ### Gameplay Demo 1
 
-![](./assets/play1.gif)
+<p>
+  <img src="./assets/play1.gif" width="100%" />
+</p>
 
 ### Gameplay Demo 2
 
-![](./assets/play2.gif)
+<p>
+  <img src="./assets/play2.gif" width="100%" />
+</p>
 
 On map construction phases, the system adjusts its global strategy accordingly by generating related code using CodeBrain. For example, the resources may be allocated as follows:
 
