@@ -8,7 +8,7 @@ A code-based "brain" that dynamically adjusts plans and strategies through code 
 
 CodeBrain-1 achieves top-tier performance on [Terminal Bench 2.0](https://www.tbench.ai/) by 2026-02-10:
 
-![](./assets/leaderboard2.PNG)
+![](./assets/leaderboard.png)
 
 On a focused subset of 47 coding tasks, CodeBrain-1 scores **72.3%**, demonstrating consistent code generation and execution capabilities.
 
