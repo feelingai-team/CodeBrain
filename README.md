@@ -2,7 +2,7 @@
 
 A code-based "brain" that dynamically adjusts plans and strategies through code generation.
 
-![](./assets/cover.png)
+![](./assets/architecture.PNG)
 
 ## Benchmark Results
 
