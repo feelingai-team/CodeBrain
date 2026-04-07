@@ -8,8 +8,6 @@ A code-based "brain" that dynamically adjusts plans and strategies through code 
 
 CodeBrain-1 achieves top-tier performance on [Terminal Bench 2.0](https://www.tbench.ai/) by 2026-02-10:
 
-![](./assets/leaderboard.png)
-
 On a focused subset of 47 coding tasks, CodeBrain-1 scores **72.3%**, demonstrating consistent code generation and execution capabilities.
 
 Terminal Bench 2.0 is one of the harder agent benchmarks out there. It throws long, multi-step terminal tasks at you where things break in messy, realistic ways. Running it surfaced a bunch of recurring failure modes in our pipeline, and most of our gains came from just fixing those:
@@ -45,6 +43,12 @@ CodeBrain further leverages the diagnostic capabilities of the Language Server P
 - **Monorepo-aware** — auto-discovers sub-projects and resolves per-project toolchains such as `venv`, `go.mod`, `tsconfig`, and `CMake`
 - **Zero framework coupling** — pure Python, works with any MCP-compatible agent
 - **Intent-oriented tools** — consolidated low-level operations into what agents actually need, such as `validate`, `explore_symbol`, `search`, `check_impact`, `debug_trace`, and `rename_symbol`
+
+## Cost Efficiency
+
+Beyond strong technical performance, CodeBrain also substantially reduces usage cost for developers and paid users. On the full 89-task Terminal-Bench 2.0 evaluation, Claude-Opus-4.6 incurred a token cost of **$313.0**, while the same evaluation with CodeBrain reduced the cost to **$112.9**, a **63.9%** reduction.
+
+![](./assets/leaderboard2.PNG)
 
 ## What CodeBrain enables for agents
 
@@ -90,6 +94,14 @@ CodeBrain detects sub-project boundaries and resolves the corresponding toolchai
 ### An Example
 
 In search–engage–withdraw–style games, if a player repeatedly follows a habitual route and is observed multiple times, opposing groups can gradually reinforce a form of collective memory associated with that behavior.
+
+### Gameplay Demo 1
+
+![](./assets/play1.gif)
+
+### Gameplay Demo 2
+
+![](./assets/play2.gif)
 
 On map construction phases, the system adjusts its global strategy accordingly by generating related code using CodeBrain. For example, the resources may be allocated as follows:
 
