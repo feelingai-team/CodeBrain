@@ -146,5 +146,5 @@ See [docs/guide.md](docs/guide.md) for the full reference, including SDK usage, 
 
 We are currently focused on improving stability and efficiency. The planned release stages are:
 
-- [ ] **Core module source code** - Late March 2026
+- [x] **Core module source code**
 - [ ] **Integration with popular agents** - TBD
